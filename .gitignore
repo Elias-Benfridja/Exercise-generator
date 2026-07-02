@@ -1,0 +1,53 @@
+# Virtual environment
+
+venv/
+
+# Environment variables
+
+.env
+
+# Database
+
+db.sqlite3
+
+# Model file
+
+model/
+
+# Media uploads
+
+media/
+
+# Python cache
+
+__pycache__/
+
+- .pyc
+- .pyo
+- .pyd
+
+# Migrations (debatable - see note below)
+
+# */migrations/
+
+# VS Code
+
+.vscode/
+
+# OS files
+
+.DS_Store
+
+Thumbs.db
+
+# Logs
+
+- .log
+
+# Distribution / packaging
+
+dist/
+
+build/
+
+- .egg-info/
