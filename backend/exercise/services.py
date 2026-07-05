@@ -23,8 +23,11 @@ Create ONE exercise about the topic "{topic}" at {difficulty} difficulty.
 
 A {difficulty} exercise is defined as: {criteria}.
 
-Use plain text for all math notation (e.g. "x^2" not LaTeX, "3/4" not \\frac).
-The answer must be a single final value or simplified expression, not a worked solution.
+Wrap all mathematical notation in single dollar signs for LaTeX rendering,
+e.g. "$x^2$", "$\\frac{{2}}{{3}}$", "$\\sqrt{{x+1}}$". Keep surrounding
+sentence text in plain English outside the dollar signs.
+The answer must be a single final value or simplified expression, also
+wrapped in dollar signs if it contains math notation (e.g. "$x = 2$").
 
 Return ONLY a single JSON object, no array, no markdown, no explanation, in exactly this format:
 {{
