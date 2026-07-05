@@ -5,11 +5,11 @@ export interface GenerateExerciseResponse {
   exercise: Exercise;
 }
 
-export interface UploadExercises {
-    tagged_exercises: Exercise[],
-    trending_lesson: string,
-    trending_difficulty: "easy" | "medium" | "hard",
-    suggested_exercise: Exercise
+export interface UploadExercisesResponse {
+  tagged_exercises: Exercise[];
+  trending_lesson: string;
+  trending_difficulty: "easy" | "medium" | "hard";
+  suggested_exercise: Exercise;
 }
 
 export async function generateExercise(
@@ -23,11 +23,11 @@ export async function generateExercise(
   return response.data.exercise;
 }
 
-export async function UploadExercisesResponse(
-    exercises: string[]
-): Promise<UploadExercises> {
-    const response = await apiClient.post<UploadExercises>("/upload/", {
-        exercises
-    });
-    return response.data
+export async function uploadExercises(
+  exercises: string[]
+): Promise<UploadExercisesResponse> {
+  const response = await apiClient.post<UploadExercisesResponse>("/upload/", {
+    exercises,
+  });
+  return response.data;
 }
