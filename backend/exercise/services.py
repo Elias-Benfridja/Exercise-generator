@@ -10,7 +10,7 @@ load_dotenv()
 client = genai.Client(api_key=os.environ.get('GEMINI_API_KEY'))
 
 
-def build_prompt(topic: str, difficulty: str) -> str:
+def build_prompt(topic: str, difficulty: str, examples: list = None) -> str:
     difficulty_criteria = {
         "easy": "a single-step problem requiring direct application of one formula or concept",
         "medium": "a multi-step problem combining two related concepts",
@@ -18,11 +18,23 @@ def build_prompt(topic: str, difficulty: str) -> str:
     }
     criteria = difficulty_criteria.get(difficulty.lower(), difficulty)
 
+    examples_block = ""
+    if examples:
+        formatted = "\n".join(
+            f'- Question: {ex.question_text}\n  Answer: {ex.answer_text}'
+            for ex in examples
+        )
+        examples_block = f"""
+Here are real examples of exercises on this topic, to guide your style,
+notation, and difficulty calibration (do not copy them, just match their style):
+{formatted}
+"""
+
     return f"""You are a math exercise generator.
 Create ONE exercise about the topic "{topic}" at {difficulty} difficulty.
 
 A {difficulty} exercise is defined as: {criteria}.
-
+{examples_block}
 Wrap all mathematical notation in single dollar signs for LaTeX rendering,
 e.g. "$x^2$", "$\\frac{{2}}{{3}}$", "$\\sqrt{{x+1}}$". Keep surrounding
 sentence text in plain English outside the dollar signs.
@@ -36,8 +48,10 @@ Return ONLY a single JSON object, no array, no markdown, no explanation, in exac
   "answer": "..."
 }}"""
 
+
 def get_exercise(topic: str, difficulty: str) -> dict:
-    prompt = build_prompt(topic,difficulty)
+    examples = get_similar_exercises(topic)
+    prompt = build_prompt(topic, difficulty, examples)
     try:
         response = client.models.generate_content(
             model='gemini-2.5-flash',
@@ -45,7 +59,6 @@ def get_exercise(topic: str, difficulty: str) -> dict:
         )
     except Exception as e:
         raise Exception(f"Gemini API error: {str(e)}")
-    # Clean and parse response
     raw = response.text.strip()
     start = raw.index('{')
     end = raw.rindex('}') + 1
@@ -54,13 +67,12 @@ def get_exercise(topic: str, difficulty: str) -> dict:
         exercise = json.loads(raw)
     except Exception as e:
         raise Exception(f"Failed to parse Gemini response: {raw}") from e
-    # Save cache
     saved_exercise = Exercise.objects.create(
-        topic = topic.lower(),
-        difficulty = Exercise.Difficulty.from_label(difficulty),
-        answer_text = exercise["answer"],
-        question_text = exercise["question"],  
-        source = 'G'  
+        topic=topic.lower(),
+        difficulty=Exercise.Difficulty.from_label(difficulty),
+        answer_text=exercise["answer"],
+        question_text=exercise["question"],
+        source='G'
     )
     return saved_exercise
 
@@ -135,3 +147,44 @@ def get_most_common(saved: list, attr: str) -> str:
     counts = Counter(values)
     top_value, _ = counts.most_common(1)[0]
     return top_value
+
+def get_similar_exercises(topic: str, limit: int = 3) -> list:
+    return list(Exercise.objects.filter(
+        topic__icontains=topic,
+        source=Exercise.Source.SEED_DATASET,
+    )[:limit])
+    
+
+def verify_exercise(exercise_id: int) -> dict:
+    try:
+        exercise = Exercise.objects.get(id=exercise_id)
+    except Exercise.DoesNotExist:
+        raise Exception(f"No exercise found with id {exercise_id}")
+
+    prompt = f"""Solve this math problem and give ONLY the final answer,
+no explanation, no steps, just the final value or expression.
+
+Problem: {exercise.question_text}"""
+
+    answers = []
+    for _ in range(3):
+        try:
+            result = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt
+            )
+            normalized = result.text.strip().lower().replace(" ", "")
+            answers.append(normalized)
+        except Exception as e:
+            raise Exception(f"Gemini API error: {str(e)}")
+
+    counts = Counter(answers)
+    consensus, votes = counts.most_common(1)[0]
+    original_normalized = exercise.answer_text.strip().lower().replace(" ", "")
+
+    return {
+        "match": consensus == original_normalized,
+        "consensus_answer": consensus,
+        "original_answer": exercise.answer_text,
+        "votes": votes,
+    }

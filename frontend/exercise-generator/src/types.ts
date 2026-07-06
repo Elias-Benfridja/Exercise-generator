@@ -8,3 +8,10 @@ export interface Exercise {
   answer_text: string;
   source: "G" | "S" | "U";
 }
+
+export interface VerifyResult {
+  match: boolean;
+  consensus_answer: string;
+  original_answer: string;
+  votes: number;
+}

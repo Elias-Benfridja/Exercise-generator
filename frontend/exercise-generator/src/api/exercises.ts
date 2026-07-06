@@ -1,5 +1,6 @@
 import apiClient from "./client";
-import type { Exercise } from "../types";
+import type { Exercise, VerifyResult } from "../types";
+
 
 export interface GenerateExerciseResponse {
   exercise: Exercise;
@@ -29,5 +30,10 @@ export async function uploadExercises(
   const response = await apiClient.post<UploadExercisesResponse>("/upload/", {
     exercises,
   });
+  return response.data;
+}
+
+export async function verifyExercise(exerciseId: number): Promise<VerifyResult> {
+  const response = await apiClient.post<VerifyResult>(`/verify/${exerciseId}/`);
   return response.data;
 }

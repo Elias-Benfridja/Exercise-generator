@@ -1,4 +1,4 @@
-from .services import get_exercise, tag_and_solve_exercises, get_most_common
+from .services import get_exercise, tag_and_solve_exercises, get_most_common, verify_exercise
 from .serializers import ExercisePostSerializer, ExerciseSerializer, ExerciseUploadSerializer
 from .models import Exercise
 from rest_framework import status
@@ -51,3 +51,11 @@ class UploadExercisesView(GenericAPIView):
             "trending_difficulty": top_difficulty_label,
             "suggested_exercise": ExerciseSerializer(suggested).data,
         }, status=status.HTTP_200_OK)
+    
+class VerifyExerciseView(GenericAPIView):
+    def post(self, request, exercise_id):
+        try:
+            result = verify_exercise(exercise_id)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(result, status=status.HTTP_200_OK)

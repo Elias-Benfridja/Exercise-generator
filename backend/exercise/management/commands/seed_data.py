@@ -5,7 +5,7 @@ from ...models import Exercise
 class Command(BaseCommand):
     def handle(self, *args, **options):
         dataset = load_dataset("nlile/hendrycks-MATH-benchmark", split="train")
-        dataset = dataset.select(range(300))
+        dataset = dataset.select(range(3000))
         exercises = []
         for row in dataset:
             difficulty = Exercise.Difficulty.from_level(row['level'])
