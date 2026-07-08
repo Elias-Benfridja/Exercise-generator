@@ -1,4 +1,4 @@
-from .services import get_exercise, tag_and_solve_exercises, get_most_common, verify_exercise
+from .services import get_exercise, tag_and_solve_exercises, get_most_common, verify_exercise, predict_difficulty
 from .serializers import ExercisePostSerializer, ExerciseSerializer, ExerciseUploadSerializer
 from .models import Exercise
 from rest_framework import status
@@ -7,21 +7,33 @@ from rest_framework.generics import GenericAPIView, ListAPIView
 
 # Create your views here.
 
+
 class ExerciseView(GenericAPIView):
     serializer_class = ExercisePostSerializer
+
     def post(self, request):
-        serializer = self.get_serializer(data = request.data)
-        serializer.is_valid(raise_exception = True)
-        
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
         topic = serializer.validated_data["topic"]
         difficulty = serializer.validated_data["difficulty"]
         try:
             exercise = get_exercise(topic, difficulty)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        exercise = ExerciseSerializer(exercise).data
-        
-        return Response({"exercise": exercise}, status=status.HTTP_200_OK)
+        try:
+            predicted_difficulty = predict_difficulty(exercise.question_text)
+        except Exception as e:
+            predicted_difficulty = None
+        exercise_data = ExerciseSerializer(exercise).data
+
+        return Response(
+            {
+                "exercise": exercise_data,
+                "predicted_difficulty": predicted_difficulty,
+            },
+            status=status.HTTP_200_OK,
+        )
     
 class AllExercisesView(ListAPIView):
     serializer_class = ExerciseSerializer

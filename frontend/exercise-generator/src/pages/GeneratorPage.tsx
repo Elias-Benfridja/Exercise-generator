@@ -4,12 +4,12 @@ import type { Exercise } from "../types";
 import ExerciseCard from "../components/ExerciseCard";
 
 export default function GeneratorPage() {
-  // TODO: topic input state, difficulty selection state, submit handler, result state — we'll wire these together next.
   const [topic, setTopic] = useState<string>("");
   const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">(
     "medium",
   );
   const [result, setResult] = useState<Exercise | null>(null);
+  const [predictedDifficulty, setPredictedDifficulty] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
 
@@ -22,7 +22,8 @@ export default function GeneratorPage() {
     setError("");
     try {
       const response = await generateExercise(topic, difficulty);
-      setResult(response);
+      setResult(response.exercise);
+      setPredictedDifficulty(response.predicted_difficulty);
     } catch (err) {
       setError("Error generating exercise");
       console.log(err);
@@ -68,7 +69,10 @@ export default function GeneratorPage() {
                   placeholder="e.g. quadratic equations"
                   type="text"
                   value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
+                  onChange={(e) => {
+                    setTopic(e.target.value);
+                    if (error) setError("");
+                  }}
                   className="w-full pl-12 pr-4 py-4 bg-surface-container-low border-none rounded-lg focus:ring-2 focus:ring-primary transition-all duration-200"
                 />
               </div>
@@ -79,7 +83,6 @@ export default function GeneratorPage() {
                 Difficulty Level
               </label>
               <div className="bg-surface-container-low p-1.5 rounded-lg flex gap-1 items-center h-14">
-                {/* TODO: turn these into controlled selectable pills */}
                 <button
                   type="button"
                   onClick={() => setDifficulty("easy")}
@@ -139,14 +142,28 @@ export default function GeneratorPage() {
             </div>
           </form>
         </div>
-      </div>
-      {error && (
-        <p className="text-error text-sm font-semibold text-center mb-6">
-          {error}
-        </p>
-      )}
 
-      {result && <ExerciseCard exercise={result} />}
+        {error && (
+          <p className="text-error text-sm font-semibold text-center mb-6">
+            {error}
+          </p>
+        )}
+
+        {result && (
+          <>
+            {predictedDifficulty && predictedDifficulty !== difficulty && (
+              <p className="text-sm text-on-surface-variant text-center mb-4 italic">
+                Note: our difficulty classifier estimates this is closer to{" "}
+                <span className="font-semibold capitalize">
+                  {predictedDifficulty}
+                </span>{" "}
+                difficulty.
+              </p>
+            )}
+            <ExerciseCard exercise={result} />
+          </>
+        )}
+      </div>
     </main>
   );
 }

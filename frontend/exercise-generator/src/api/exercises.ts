@@ -4,6 +4,7 @@ import type { Exercise, VerifyResult } from "../types";
 
 export interface GenerateExerciseResponse {
   exercise: Exercise;
+  predicted_difficulty: "easy" | "medium" | "hard" | null;
 }
 
 export interface UploadExercisesResponse {
@@ -16,12 +17,12 @@ export interface UploadExercisesResponse {
 export async function generateExercise(
   topic: string,
   difficulty: "easy" | "medium" | "hard"
-): Promise<Exercise> {
+): Promise<GenerateExerciseResponse> {
   const response = await apiClient.post<GenerateExerciseResponse>("/generate/", {
     topic,
     difficulty,
   });
-  return response.data.exercise;
+  return response.data;
 }
 
 export async function uploadExercises(

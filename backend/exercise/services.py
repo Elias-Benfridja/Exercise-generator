@@ -4,10 +4,15 @@ from google import genai
 from dotenv import load_dotenv
 from .models import Exercise
 from collections import Counter
+import joblib
 
 load_dotenv()
 
 client = genai.Client(api_key=os.environ.get('GEMINI_API_KEY'))
+
+_ml_models_dir = os.path.join(os.path.dirname(__file__), "ml_models")
+_vectorizer = joblib.load(os.path.join(_ml_models_dir, "vectorizer.joblib"))
+_classifier = joblib.load(os.path.join(_ml_models_dir, "difficulty_classifier.joblib"))
 
 
 def build_prompt(topic: str, difficulty: str, examples: list = None) -> str:
@@ -188,3 +193,8 @@ Problem: {exercise.question_text}"""
         "original_answer": exercise.answer_text,
         "votes": votes,
     }
+
+def predict_difficulty(question_text: str) -> str:
+    vector = _vectorizer.transform([question_text])
+    predicted_code = _classifier.predict(vector)[0]
+    return Exercise.Difficulty.to_label(predicted_code)
