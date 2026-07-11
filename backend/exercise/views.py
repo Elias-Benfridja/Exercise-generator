@@ -1,4 +1,4 @@
-from .services import get_exercise, tag_and_solve_exercises, get_most_common, verify_exercise, predict_difficulty
+from .services import get_exercise, tag_and_solve_exercises, get_most_common, verify_exercise, predict_difficulty, tag_and_solve_from_file
 from .serializers import ExercisePostSerializer, ExerciseSerializer, ExerciseUploadSerializer
 from .models import Exercise
 from rest_framework import status
@@ -71,3 +71,30 @@ class VerifyExerciseView(GenericAPIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response(result, status=status.HTTP_200_OK)
+    
+class UploadFileView(GenericAPIView):
+    def post(self, request):
+        print("FILES:", request.FILES)
+        print("POST:", request.POST)
+        uploaded_file = request.FILES.get("file")
+        if not uploaded_file:
+            return Response({"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+        file_bytes = uploaded_file.read()
+        mime_type = uploaded_file.content_type
+
+        try:
+            saved = tag_and_solve_from_file(file_bytes, mime_type)
+            top_lesson = get_most_common(saved, "topic")
+            top_difficulty_code = get_most_common(saved, "difficulty")
+            top_difficulty_label = Exercise.Difficulty.to_label(top_difficulty_code)
+            suggested = get_exercise(top_lesson, top_difficulty_label)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({
+            "tagged_exercises": ExerciseSerializer(saved, many=True).data,
+            "trending_lesson": top_lesson,
+            "trending_difficulty": top_difficulty_label,
+            "suggested_exercise": ExerciseSerializer(suggested).data,
+        }, status=status.HTTP_200_OK)

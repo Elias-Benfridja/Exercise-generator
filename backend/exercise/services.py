@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from .models import Exercise
 from collections import Counter
 import joblib
+from google.genai import types
 
 load_dotenv()
 
@@ -198,3 +199,64 @@ def predict_difficulty(question_text: str) -> str:
     vector = _vectorizer.transform([question_text])
     predicted_code = _classifier.predict(vector)[0]
     return Exercise.Difficulty.to_label(predicted_code)
+
+
+
+
+def build_file_tagging_prompt() -> str:
+    return """You are looking at an image or document containing math exercises
+(this could be a scanned exam, a photo of a worksheet, or a typed document).
+
+For each distinct exercise you can identify in this file:
+1. Transcribe the exercise's question text.
+2. Identify the specific lesson or concept it tests
+   (e.g. "solving quadratic equations by factoring", "law of cosines").
+3. Determine its difficulty: "easy", "medium", or "hard".
+4. Solve it and give the final answer.
+
+Wrap all mathematical notation in single dollar signs for LaTeX rendering,
+e.g. "$x^2$", "$\\frac{2}{3}$".
+
+Rules:
+- Lesson names must be short (2-6 words), lowercase, and consistent.
+- Ignore anything in the file that isn't a math exercise (headers, instructions, page numbers).
+
+Return ONLY a JSON array, no markdown, no explanation, in this format:
+[
+  {"question": "...", "lesson": "...", "difficulty": "...", "answer": "..."}
+]"""
+
+
+def tag_and_solve_from_file(file_bytes: bytes, mime_type: str) -> list:
+    prompt = build_file_tagging_prompt()
+    file_part = types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
+
+    try:
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[prompt, file_part]
+        )
+    except Exception as e:
+        raise Exception(f"Gemini API error: {str(e)}")
+
+    raw = response.text.strip()
+    start = raw.index('[')
+    end = raw.rindex(']') + 1
+    raw = raw[start:end]
+    try:
+        tagged = json.loads(raw)
+    except Exception as e:
+        raise Exception(f"Failed to parse Gemini response: {raw}") from e
+
+    saved = []
+    for item in tagged:
+        saved.append(Exercise(
+            topic=item["lesson"],
+            difficulty=Exercise.Difficulty.from_label(item["difficulty"]),
+            question_text=item["question"],
+            answer_text=item["answer"],
+            source=Exercise.Source.UPLOADED,
+        ))
+
+    Exercise.objects.bulk_create(saved)
+    return saved

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { uploadExercises } from "../api/exercises";
+import { uploadExercises, uploadExerciseFile } from "../api/exercises";
 import type { UploadExercisesResponse } from "../api/exercises";
 import ExerciseCard from "../components/ExerciseCard";
 import DifficultyBadge from "../components/DifficultyBadge";
@@ -8,6 +8,7 @@ import MathText from "../components/MathText";
 export default function TrendAnalysisPage() {
   const [currentInput, setCurrentInput] = useState<string>("");
   const [exercises, setExercises] = useState<string[]>([]);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [result, setResult] = useState<UploadExercisesResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
@@ -44,8 +45,26 @@ export default function TrendAnalysisPage() {
     }
   }
 
+  async function handleFileUpload() {
+    if (!selectedFile) {
+      setError("Please choose a file first");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const response = await uploadExerciseFile(selectedFile);
+      setResult(response);
+    } catch (err) {
+      setError("Error analyzing file");
+      console.log(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
-    <main className="grow pt-24 pb-16 px-4 md:px-10 max-w-300 mx-auto w-full">
+    <main className="grow pt-24 pb-16 px-4 md:px-10 max-w-[1200px] mx-auto w-full">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Input Section */}
         <section className="lg:col-span-8 flex flex-col gap-6">
@@ -54,10 +73,37 @@ export default function TrendAnalysisPage() {
               Add Practice Problems
             </h2>
             <p className="text-on-surface-variant mb-6">
-              Add exercises one at a time, then analyze the whole batch to find trends.
+              Add exercises one at a time, or upload an exam file, then analyze the batch to find trends.
             </p>
 
+            {/* File upload */}
+            <div className="mb-6 pb-6 border-b border-[#F0EFEB]">
+              <label className="font-label-md text-sm font-semibold text-on-surface-variant block mb-3">
+                Upload an exam file (image or PDF)
+              </label>
+              <div className="flex gap-3">
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+                  className="flex-1 text-sm text-on-surface-variant file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-surface-container-high file:text-primary file:text-sm file:font-semibold hover:file:bg-surface-container"
+                />
+                <button
+                  type="button"
+                  onClick={handleFileUpload}
+                  disabled={loading || !selectedFile}
+                  className="bg-on-tertiary-container text-on-tertiary px-6 py-2 rounded-lg font-label-md text-sm font-semibold hover:opacity-90 transition-all active:scale-95 shadow-sm disabled:opacity-50 shrink-0"
+                >
+                  Upload &amp; Analyze
+                </button>
+              </div>
+            </div>
+
+            {/* Manual add */}
             <div className="space-y-3">
+              <label className="font-label-md text-sm font-semibold text-on-surface-variant">
+                Or add exercises manually
+              </label>
               <textarea
                 value={currentInput}
                 onChange={(e) => {
@@ -101,23 +147,25 @@ export default function TrendAnalysisPage() {
               </div>
             )}
 
-            <div className="mt-6 pt-6 border-t border-[#F0EFEB]">
-              <button
-                type="button"
-                onClick={handleAnalyze}
-                disabled={loading}
-                className="w-full bg-on-tertiary-container text-on-tertiary px-6 py-3 rounded-lg font-label-md text-sm font-semibold hover:opacity-90 transition-all active:scale-95 shadow-sm disabled:opacity-70 flex items-center justify-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                    Analyzing...
-                  </>
-                ) : (
-                  "Analyze"
-                )}
-              </button>
-            </div>
+            {exercises.length > 0 && (
+              <div className="mt-6 pt-6 border-t border-[#F0EFEB]">
+                <button
+                  type="button"
+                  onClick={handleAnalyze}
+                  disabled={loading}
+                  className="w-full bg-on-tertiary-container text-on-tertiary px-6 py-3 rounded-lg font-label-md text-sm font-semibold hover:opacity-90 transition-all active:scale-95 shadow-sm disabled:opacity-70 flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    "Analyze Added Exercises"
+                  )}
+                </button>
+              </div>
+            )}
 
             {error && (
               <p className="text-error text-sm font-semibold mt-4">{error}</p>

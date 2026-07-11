@@ -38,3 +38,21 @@ export async function verifyExercise(exerciseId: number): Promise<VerifyResult> 
   const response = await apiClient.post<VerifyResult>(`/verify/${exerciseId}/`);
   return response.data;
 }
+
+export async function uploadExerciseFile(
+  file: File
+): Promise<UploadExercisesResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await apiClient.post<UploadExercisesResponse>(
+    "/upload-file/",
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    }
+  );
+  return response.data;
+}
