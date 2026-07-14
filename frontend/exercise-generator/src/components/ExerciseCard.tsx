@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { Exercise, VerifyResult } from "../types";
 import DifficultyBadge from "./DifficultyBadge";
 import MathText from "./MathText";
-import { verifyExercise } from "../api/exercises";
+import { verifyExercise, toggleFavorite } from "../api/exercises";
 
 interface ExerciseCardProps {
   exercise: Exercise;
@@ -13,6 +13,8 @@ export default function ExerciseCard({ exercise }: ExerciseCardProps) {
   const [verifying, setVerifying] = useState(false);
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
   const [verifyError, setVerifyError] = useState<string>("");
+  const [isFavorited, setIsFavorited] = useState(exercise.is_favorited);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
 
   async function handleVerify() {
     setVerifying(true);
@@ -28,9 +30,35 @@ export default function ExerciseCard({ exercise }: ExerciseCardProps) {
     }
   }
 
+  async function handleToggleFavorite() {
+    setFavoriteLoading(true);
+    try {
+      const result = await toggleFavorite(exercise.id);
+      setIsFavorited(result.favorited);
+    } catch (err) {
+      console.log(err);
+    } finally {
+      setFavoriteLoading(false);
+    }
+  }
+
   return (
     <div className="relative overflow-hidden bg-surface-container-lowest border border-surface-container rounded-xl shadow-[0px_8px_30px_rgba(24,29,58,0.06)]">
-      <div className="absolute top-6 right-6">
+      <div className="absolute top-6 right-6 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={handleToggleFavorite}
+          disabled={favoriteLoading}
+          aria-label={isFavorited ? "Remove from favorites" : "Add to favorites"}
+          className="text-outline hover:text-error transition-colors disabled:opacity-50"
+        >
+          <span
+            className="material-symbols-outlined"
+            style={isFavorited ? { fontVariationSettings: "'FILL' 1" } : undefined}
+          >
+            favorite
+          </span>
+        </button>
         <DifficultyBadge difficulty={exercise.difficulty} />
       </div>
       <div className="p-8 md:p-10">

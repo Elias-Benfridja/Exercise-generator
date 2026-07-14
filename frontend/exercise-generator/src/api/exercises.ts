@@ -18,7 +18,7 @@ export async function generateExercise(
   topic: string,
   difficulty: "easy" | "medium" | "hard"
 ): Promise<GenerateExerciseResponse> {
-  const response = await apiClient.post<GenerateExerciseResponse>("/generate/", {
+  const response = await apiClient.post<GenerateExerciseResponse>("/exercise/generate/", {
     topic,
     difficulty,
   });
@@ -28,14 +28,14 @@ export async function generateExercise(
 export async function uploadExercises(
   exercises: string[]
 ): Promise<UploadExercisesResponse> {
-  const response = await apiClient.post<UploadExercisesResponse>("/upload/", {
+  const response = await apiClient.post<UploadExercisesResponse>("/exercise/upload/", {
     exercises,
   });
   return response.data;
 }
 
 export async function verifyExercise(exerciseId: number): Promise<VerifyResult> {
-  const response = await apiClient.post<VerifyResult>(`/verify/${exerciseId}/`);
+  const response = await apiClient.post<VerifyResult>(`/exercise/verify/${exerciseId}/`);
   return response.data;
 }
 
@@ -46,7 +46,7 @@ export async function uploadExerciseFile(
   formData.append("file", file);
 
   const response = await apiClient.post<UploadExercisesResponse>(
-    "/upload-file/",
+    "/exercise/upload-file/",
     formData,
     {
       headers: {
@@ -54,5 +54,24 @@ export async function uploadExerciseFile(
       },
     }
   );
+  return response.data;
+}
+
+export async function toggleFavorite(
+  exerciseId: number
+): Promise<{ favorited: boolean }> {
+  const response = await apiClient.post<{ favorited: boolean }>(
+    `/exercise/favorite/${exerciseId}/`
+  );
+  return response.data;
+}
+
+export async function getMyFavorites(): Promise<Exercise[]> {
+  const response = await apiClient.get<Exercise[]>("/exercise/favorite/");
+  return response.data;
+}
+
+export async function getMyHistory(): Promise<Exercise[]> {
+  const response = await apiClient.get<Exercise[]>("/exercise/mine/");
   return response.data;
 }

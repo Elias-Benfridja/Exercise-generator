@@ -4,6 +4,7 @@ from .models import Exercise
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.generics import GenericAPIView, ListAPIView
+from rest_framework.permissions import IsAuthenticated
 
 # Create your views here.
 
@@ -14,11 +15,11 @@ class ExerciseView(GenericAPIView):
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
+        user = request.user if request.user.is_authenticated else None
         topic = serializer.validated_data["topic"]
         difficulty = serializer.validated_data["difficulty"]
         try:
-            exercise = get_exercise(topic, difficulty)
+            exercise = get_exercise(topic, difficulty, user)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         try:
@@ -45,15 +46,15 @@ class UploadExercisesView(GenericAPIView):
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
+        user = request.user if request.user.is_authenticated else None
         exercises = serializer.validated_data["exercises"]
 
         try:
-            saved = tag_and_solve_exercises(exercises)
+            saved = tag_and_solve_exercises(exercises, user)
             top_lesson = get_most_common(saved, "topic")
             top_difficulty_code = get_most_common(saved, "difficulty")
             top_difficulty_label = Exercise.Difficulty.to_label(top_difficulty_code)
-            suggested = get_exercise(top_lesson, top_difficulty_label)
+            suggested = get_exercise(top_lesson, top_difficulty_label, user)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -74,8 +75,7 @@ class VerifyExerciseView(GenericAPIView):
     
 class UploadFileView(GenericAPIView):
     def post(self, request):
-        print("FILES:", request.FILES)
-        print("POST:", request.POST)
+        user = request.user if request.user.is_authenticated else None
         uploaded_file = request.FILES.get("file")
         if not uploaded_file:
             return Response({"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST)
@@ -84,11 +84,11 @@ class UploadFileView(GenericAPIView):
         mime_type = uploaded_file.content_type
 
         try:
-            saved = tag_and_solve_from_file(file_bytes, mime_type)
+            saved = tag_and_solve_from_file(file_bytes, mime_type, user)
             top_lesson = get_most_common(saved, "topic")
             top_difficulty_code = get_most_common(saved, "difficulty")
             top_difficulty_label = Exercise.Difficulty.to_label(top_difficulty_code)
-            suggested = get_exercise(top_lesson, top_difficulty_label)
+            suggested = get_exercise(top_lesson, top_difficulty_label, user)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -98,3 +98,33 @@ class UploadFileView(GenericAPIView):
             "trending_difficulty": top_difficulty_label,
             "suggested_exercise": ExerciseSerializer(suggested).data,
         }, status=status.HTTP_200_OK)
+        
+class FavoriteToggleView(GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request, exercise_id):
+        try:
+            exercise = Exercise.objects.get(id=exercise_id)
+        except Exercise.DoesNotExist:
+            return Response({"error": f"No exercise found with id {exercise_id}"}, status=status.HTTP_404_NOT_FOUND)
+            
+        state = exercise.favorited_by.filter(id=request.user.id).exists()
+        if state:
+            exercise.favorited_by.remove(request.user)
+            favorited = False
+        else:
+            exercise.favorited_by.add(request.user)
+            favorited = True
+        return Response({"favorited": favorited}, status=status.HTTP_200_OK)
+    
+class MyFavoritesView(ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = ExerciseSerializer
+    def get_queryset(self):
+        return self.request.user.favorites.all()
+    
+class MyHistoryView(ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = ExerciseSerializer
+    def get_queryset(self):
+        return Exercise.objects.filter(user=self.request.user)
+    

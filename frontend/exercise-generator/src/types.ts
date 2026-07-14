@@ -7,6 +7,7 @@ export interface Exercise {
   question_text: string;
   answer_text: string;
   source: "G" | "S" | "U";
+  is_favorited: boolean;
 }
 
 export interface VerifyResult {

@@ -6,6 +6,7 @@ from .models import Exercise
 from collections import Counter
 import joblib
 from google.genai import types
+from django.contrib.auth.models import User
 
 load_dotenv()
 
@@ -55,7 +56,7 @@ Return ONLY a single JSON object, no array, no markdown, no explanation, in exac
 }}"""
 
 
-def get_exercise(topic: str, difficulty: str) -> dict:
+def get_exercise(topic: str, difficulty: str, user=None) -> dict:
     examples = get_similar_exercises(topic)
     prompt = build_prompt(topic, difficulty, examples)
     try:
@@ -78,7 +79,8 @@ def get_exercise(topic: str, difficulty: str) -> dict:
         difficulty=Exercise.Difficulty.from_label(difficulty),
         answer_text=exercise["answer"],
         question_text=exercise["question"],
-        source='G'
+        source='G',
+        user=user
     )
     return saved_exercise
 
@@ -111,7 +113,7 @@ object per exercise, in the same order, in this format:
 ]"""
 
 
-def tag_and_solve_exercises(exercises: list[str]) -> str:
+def tag_and_solve_exercises(exercises: list[str], user=None) -> str:
     prompt = build_tagging_prompt(exercises)
     try:
         response = client.models.generate_content(
@@ -141,6 +143,7 @@ def tag_and_solve_exercises(exercises: list[str]) -> str:
             question_text=exercises[i],
             answer_text=tag["answer"],
             source=Exercise.Source.UPLOADED,
+            user=user
         ))
 
     Exercise.objects.bulk_create(saved)
@@ -227,7 +230,7 @@ Return ONLY a JSON array, no markdown, no explanation, in this format:
 ]"""
 
 
-def tag_and_solve_from_file(file_bytes: bytes, mime_type: str) -> list:
+def tag_and_solve_from_file(file_bytes: bytes, mime_type: str, user = None) -> list:
     prompt = build_file_tagging_prompt()
     file_part = types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
 
@@ -256,6 +259,7 @@ def tag_and_solve_from_file(file_bytes: bytes, mime_type: str) -> list:
             question_text=item["question"],
             answer_text=item["answer"],
             source=Exercise.Source.UPLOADED,
+            user = user
         ))
 
     Exercise.objects.bulk_create(saved)

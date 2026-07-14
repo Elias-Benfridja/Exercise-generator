@@ -64,7 +64,7 @@ export default function TrendAnalysisPage() {
   }
 
   return (
-    <main className="grow pt-24 pb-16 px-4 md:px-10 max-w-[1200px] mx-auto w-full">
+    <main className="grow pt-24 pb-16 px-4 md:px-10 max-w-300 mx-auto w-full">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Input Section */}
         <section className="lg:col-span-8 flex flex-col gap-6">

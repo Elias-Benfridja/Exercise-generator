@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth.models import User
 
 # Create your models here.
 
@@ -53,3 +54,5 @@ class Exercise(models.Model):
         default=Source.GENERATED
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
+    favorited_by = models.ManyToManyField(User, related_name="favorites", blank=True)

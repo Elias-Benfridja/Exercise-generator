@@ -1,12 +1,24 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 
 export default function Navbar() {
+  const navigate = useNavigate();
+
+  // Re-evaluated on every route change, since localStorage changes don't
+  // trigger a re-render on their own.
+  const isLoggedIn = Boolean(localStorage.getItem("access_token"));
+
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     `font-body-md text-base h-16 flex items-center transition-colors duration-200 ${
       isActive
         ? "text-primary font-bold border-b-2 border-tertiary-container"
         : "text-on-surface-variant hover:text-primary"
     }`;
+
+  function handleLogout() {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    navigate("/login");
+  }
 
   return (
     <nav className="fixed top-0 w-full z-50 flex justify-between items-center px-4 md:px-10 h-16 bg-surface/80 backdrop-blur-md shadow-sm">
@@ -21,7 +33,33 @@ export default function Navbar() {
           <NavLink to="/trends" className={linkClass}>
             Trend Analysis
           </NavLink>
+          {isLoggedIn && (
+            <NavLink to="/my-exercises" className={linkClass}>
+              My Exercises
+            </NavLink>
+          )}
         </div>
+      </div>
+
+      <div className="hidden md:flex gap-6 items-center">
+        {isLoggedIn ? (
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="font-body-md text-base text-on-surface-variant hover:text-primary transition-colors duration-200"
+          >
+            Log Out
+          </button>
+        ) : (
+          <>
+            <NavLink to="/login" className={linkClass}>
+              Log In
+            </NavLink>
+            <NavLink to="/register" className={linkClass}>
+              Register
+            </NavLink>
+          </>
+        )}
       </div>
     </nav>
   );
