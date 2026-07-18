@@ -8,6 +8,9 @@ export interface Exercise {
   answer_text: string;
   source: "G" | "S" | "U";
   is_favorited: boolean;
+  my_note: string;
+  hints: string[];
+  is_pinned: boolean;
 }
 
 export interface VerifyResult {

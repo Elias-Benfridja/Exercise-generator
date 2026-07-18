@@ -1,3 +1,6 @@
+from django.utils import timezone
+from datetime import timedelta
+
 from django.db import models
 from django.contrib.auth.models import User
 
@@ -56,3 +59,23 @@ class Exercise(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
     favorited_by = models.ManyToManyField(User, related_name="favorites", blank=True)
+    hints = models.JSONField(default=list, blank=True)
+    
+    
+class Note(models.Model):
+    exercise = models.ForeignKey(Exercise, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    text = models.TextField(blank=True)
+    
+    class Meta:
+        unique_together = ('user', 'exercise')
+    
+class Pin(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    exercise = models.ForeignKey(Exercise, on_delete=models.CASCADE)
+    pinned_at = models.DateTimeField(auto_now_add=True)
+    duration = models.IntegerField()
+    review_at = models.DateTimeField()
+
+    class Meta:
+        unique_together = ('user', 'exercise')

@@ -1,10 +1,12 @@
 from .services import get_exercise, tag_and_solve_exercises, get_most_common, verify_exercise, predict_difficulty, tag_and_solve_from_file
-from .serializers import ExercisePostSerializer, ExerciseSerializer, ExerciseUploadSerializer
-from .models import Exercise
+from .serializers import ExercisePostSerializer, ExerciseSerializer, ExerciseUploadSerializer, NoteSerializer, PinSerializer
+from .models import Exercise, Note, Pin
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.generics import GenericAPIView, ListAPIView
 from rest_framework.permissions import IsAuthenticated
+from django.utils import timezone
+from datetime import timedelta
 
 # Create your views here.
 
@@ -26,7 +28,7 @@ class ExerciseView(GenericAPIView):
             predicted_difficulty = predict_difficulty(exercise.question_text)
         except Exception as e:
             predicted_difficulty = None
-        exercise_data = ExerciseSerializer(exercise).data
+        exercise_data = ExerciseSerializer(exercise, context={'request': request}).data
 
         return Response(
             {
@@ -59,10 +61,10 @@ class UploadExercisesView(GenericAPIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response({
-            "tagged_exercises": ExerciseSerializer(saved, many=True).data,
+            "tagged_exercises": ExerciseSerializer(saved, many=True, context={'request': request}).data,
             "trending_lesson": top_lesson,
             "trending_difficulty": top_difficulty_label,
-            "suggested_exercise": ExerciseSerializer(suggested).data,
+            "suggested_exercise": ExerciseSerializer(suggested, context={'request': request}).data,
         }, status=status.HTTP_200_OK)
     
 class VerifyExerciseView(GenericAPIView):
@@ -93,10 +95,10 @@ class UploadFileView(GenericAPIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response({
-            "tagged_exercises": ExerciseSerializer(saved, many=True).data,
+            "tagged_exercises": ExerciseSerializer(saved, many=True, context={'request': request}).data,
             "trending_lesson": top_lesson,
             "trending_difficulty": top_difficulty_label,
-            "suggested_exercise": ExerciseSerializer(suggested).data,
+            "suggested_exercise": ExerciseSerializer(suggested, context={'request': request}).data,
         }, status=status.HTTP_200_OK)
         
 class FavoriteToggleView(GenericAPIView):
@@ -127,4 +129,56 @@ class MyHistoryView(ListAPIView):
     serializer_class = ExerciseSerializer
     def get_queryset(self):
         return Exercise.objects.filter(user=self.request.user)
+    
+class NoteView(GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = NoteSerializer
+    def post(self, request, exercise_id):
+        try:
+            exercise = Exercise.objects.get(id = exercise_id)
+        except Exercise.DoesNotExist:
+            return Response({"error": f"No exercise found with id {exercise_id}"}, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        note, created = Note.objects.update_or_create(
+            user=request.user,
+            exercise=exercise,
+            defaults={'text': serializer.validated_data['text']}
+        )
+        return Response(NoteSerializer(note, context={'request': request}).data, status=status.HTTP_200_OK)
+    
+class PinToggleView(GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PinSerializer
+
+    def post(self, request, exercise_id):
+        try:
+            exercise = Exercise.objects.get(id=exercise_id)
+        except Exercise.DoesNotExist:
+            return Response({"error": f"No exercise found with id {exercise_id}"}, status=status.HTTP_404_NOT_FOUND)
+
+        existing = Pin.objects.filter(user=request.user, exercise=exercise).first()
+
+        if existing:
+            existing.delete()
+            return Response({"pinned": False}, status=status.HTTP_200_OK)
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        days = serializer.validated_data['days']
+
+        review_at = timezone.now() + timedelta(days=days)
+        Pin.objects.create(user=request.user, exercise=exercise, review_at=review_at, duration=days)
+        return Response({"pinned": True, "review_at": review_at}, status=status.HTTP_200_OK)
+    
+class MyDueReviewsView(ListAPIView):
+    serializer_class = ExerciseSerializer
+    permission_classes = [IsAuthenticated]
+    def get_queryset(self):
+        return Exercise.objects.filter(
+        pin__user=self.request.user,
+        pin__review_at__lte=timezone.now()
+    )
     

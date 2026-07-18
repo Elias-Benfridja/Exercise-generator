@@ -14,6 +14,17 @@ export interface UploadExercisesResponse {
   suggested_exercise: Exercise;
 }
 
+export interface Note {
+  id: number;
+  exercise: number;
+  text: string;
+}
+
+export interface TogglePinResponse {
+  pinned: boolean;
+  review_at?: string;
+}
+
 export async function generateExercise(
   topic: string,
   difficulty: "easy" | "medium" | "hard"
@@ -73,5 +84,28 @@ export async function getMyFavorites(): Promise<Exercise[]> {
 
 export async function getMyHistory(): Promise<Exercise[]> {
   const response = await apiClient.get<Exercise[]>("/exercise/mine/");
+  return response.data;
+}
+
+export async function saveNote(exerciseId: number, text: string): Promise<Note> {
+  const response = await apiClient.post<Note>(`/exercise/note/${exerciseId}/`, {
+    text,
+  });
+  return response.data;
+}
+
+export async function togglePin(
+  exerciseId: number,
+  days?: number
+): Promise<TogglePinResponse> {
+  const response = await apiClient.post<TogglePinResponse>(
+    `/exercise/pin/${exerciseId}/`,
+    days !== undefined ? { days } : {}
+  );
+  return response.data;
+}
+
+export async function getDueReviews(): Promise<Exercise[]> {
+  const response = await apiClient.get<Exercise[]>("/exercise/due-reviews/");
   return response.data;
 }

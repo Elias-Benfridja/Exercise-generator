@@ -48,11 +48,20 @@ sentence text in plain English outside the dollar signs.
 The answer must be a single final value or simplified expression, also
 wrapped in dollar signs if it contains math notation (e.g. "$x = 2$").
 
+Also produce a list of hints that guide a student toward the solution
+without giving away the final answer. Each hint should reveal one more
+step than the last, so a student reading them in order gets progressively
+closer to solving it themselves. The final hint should NOT state the
+final answer outright — it should set up the last step, not complete it.
+Use 3 to 5 hints depending on how many steps the exercise actually has.
+Wrap math notation in hints the same way as above (single dollar signs).
+
 Return ONLY a single JSON object, no array, no markdown, no explanation, in exactly this format:
 {{
   "topic": "...",
   "question": "...",
-  "answer": "..."
+  "answer": "...",
+  "hints": ["...", "...", "..."]
 }}"""
 
 
@@ -79,6 +88,7 @@ def get_exercise(topic: str, difficulty: str, user=None) -> dict:
         difficulty=Exercise.Difficulty.from_label(difficulty),
         answer_text=exercise["answer"],
         question_text=exercise["question"],
+        hints=exercise.get("hints", []),
         source='G',
         user=user
     )
@@ -94,6 +104,11 @@ For each exercise below:
    "integration by substitution").
 2. Determine its difficulty.
 3. Solve it and give the final answer.
+4. Produce a list of hints that guide a student toward the solution
+   without giving away the final answer. Each hint should reveal one
+   more step than the last. Use 3 to 5 hints depending on how many
+   steps the exercise actually has. The final hint should NOT state
+   the final answer outright.
 
 Rules:
 - Lesson names must be short (2-6 words), lowercase, and consistent —
@@ -108,8 +123,8 @@ Exercises:
 Return ONLY a JSON array, no markdown, no explanation, with exactly one
 object per exercise, in the same order, in this format:
 [
-  {{"index": 0, "lesson": "...", "difficulty": "...", "answer": "..."}},
-  {{"index": 1, "lesson": "...", "difficulty": "...", "answer": "..."}}
+  {{"index": 0, "lesson": "...", "difficulty": "...", "answer": "...", "hints": ["...", "..."]}},
+  {{"index": 1, "lesson": "...", "difficulty": "...", "answer": "...", "hints": ["...", "..."]}}
 ]"""
 
 
@@ -142,6 +157,7 @@ def tag_and_solve_exercises(exercises: list[str], user=None) -> str:
             difficulty=Exercise.Difficulty.from_label(tag["difficulty"]),
             question_text=exercises[i],
             answer_text=tag["answer"],
+            hints=tag.get("hints", []),
             source=Exercise.Source.UPLOADED,
             user=user
         ))
@@ -216,6 +232,11 @@ For each distinct exercise you can identify in this file:
    (e.g. "solving quadratic equations by factoring", "law of cosines").
 3. Determine its difficulty: "easy", "medium", or "hard".
 4. Solve it and give the final answer.
+5. Produce a list of hints that guide a student toward the solution
+   without giving away the final answer. Each hint should reveal one
+   more step than the last. Use 3 to 5 hints depending on how many
+   steps the exercise actually has. The final hint should NOT state
+   the final answer outright.
 
 Wrap all mathematical notation in single dollar signs for LaTeX rendering,
 e.g. "$x^2$", "$\\frac{2}{3}$".
@@ -226,7 +247,7 @@ Rules:
 
 Return ONLY a JSON array, no markdown, no explanation, in this format:
 [
-  {"question": "...", "lesson": "...", "difficulty": "...", "answer": "..."}
+  {"question": "...", "lesson": "...", "difficulty": "...", "answer": "...", "hints": ["...", "..."]}
 ]"""
 
 
@@ -258,6 +279,7 @@ def tag_and_solve_from_file(file_bytes: bytes, mime_type: str, user = None) -> l
             difficulty=Exercise.Difficulty.from_label(item["difficulty"]),
             question_text=item["question"],
             answer_text=item["answer"],
+            hints=item.get("hints", []),
             source=Exercise.Source.UPLOADED,
             user = user
         ))

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { register } from "../api/auth";
+import type { FormEvent } from "react";
 
 export default function RegisterPage() {
   const [username, setUsername] = useState("");
@@ -10,7 +11,7 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
     setLoading(true);
@@ -44,7 +45,7 @@ export default function RegisterPage() {
           </p>
         )}
 
-        <form className="space-y-6" onSubmit={handleSubmit}>
+        <form className="space-y-6 p-10" onSubmit={handleSubmit}>
           {/* Username */}
           <div className="space-y-2 group">
             <label className="font-label-md text-on-surface-variant ml-1" htmlFor="username">
