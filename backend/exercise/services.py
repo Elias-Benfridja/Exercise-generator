@@ -12,6 +12,23 @@ load_dotenv()
 
 client = genai.Client(api_key=os.environ.get('GEMINI_API_KEY'))
 
+
+_DIFFICULTY_WEIGHT = {"E": 3, "M": 2, "H": 1}
+
+_INTERVAL_BY_WEIGHT_SUM = {
+    2: 1,
+    3: 2,
+    4: 3,
+    5: 5,
+    6: 7,
+}
+
+_WEAKNESS_POINTS = {
+    ('H', 'H'): 2, ('H', 'M'): 1, ('H', 'E'): 0,
+    ('M', 'H'): 3, ('M', 'M'): 1, ('M', 'E'): 0,
+    ('E', 'H'): 4, ('E', 'M'): 2, ('E', 'E'): 0,
+}
+
 _ml_models_dir = os.path.join(os.path.dirname(__file__), "ml_models")
 _vectorizer = joblib.load(os.path.join(_ml_models_dir, "vectorizer.joblib"))
 _classifier = joblib.load(os.path.join(_ml_models_dir, "difficulty_classifier.joblib"))
@@ -286,3 +303,7 @@ def tag_and_solve_from_file(file_bytes: bytes, mime_type: str, user = None) -> l
 
     Exercise.objects.bulk_create(saved)
     return saved
+
+def get_auto_review_days(exercise_difficulty: str, user_difficulty: str) -> int:
+    weight_sum = _DIFFICULTY_WEIGHT[exercise_difficulty] + _DIFFICULTY_WEIGHT[user_difficulty]
+    return _INTERVAL_BY_WEIGHT_SUM[weight_sum]

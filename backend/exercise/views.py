@@ -1,4 +1,6 @@
-from .services import get_exercise, tag_and_solve_exercises, get_most_common, verify_exercise, predict_difficulty, tag_and_solve_from_file
+from collections import Counter
+
+from .services import get_exercise, tag_and_solve_exercises, get_most_common, verify_exercise, predict_difficulty, tag_and_solve_from_file, get_auto_review_days, _WEAKNESS_POINTS
 from .serializers import ExercisePostSerializer, ExerciseSerializer, ExerciseUploadSerializer, NoteSerializer, PinSerializer
 from .models import Exercise, Note, Pin
 from rest_framework import status
@@ -167,11 +169,20 @@ class PinToggleView(GenericAPIView):
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        days = serializer.validated_data['days']
+        mode = serializer.validated_data['mode']
+        rating = serializer.validated_data['rating']
+        difficulty = exercise.difficulty
+        rating = Exercise.Difficulty.from_label(rating)
+        if mode == 'manual':
+            days = serializer.validated_data['days']
+            mode = 'M'
+        else: 
+            days = get_auto_review_days(exercise_difficulty=difficulty, user_difficulty=rating)
+            mode = 'A'
 
         review_at = timezone.now() + timedelta(days=days)
-        Pin.objects.create(user=request.user, exercise=exercise, review_at=review_at, duration=days)
-        return Response({"pinned": True, "review_at": review_at}, status=status.HTTP_200_OK)
+        Pin.objects.create(user=request.user, exercise=exercise, review_at=review_at, user_difficulty=rating, mode=mode)
+        return Response({"pinned": True, "review_at": review_at, "days": days}, status=status.HTTP_200_OK)
     
 class MyDueReviewsView(ListAPIView):
     serializer_class = ExerciseSerializer
@@ -182,3 +193,45 @@ class MyDueReviewsView(ListAPIView):
         pin__review_at__lte=timezone.now()
     )
     
+class TopicMasteryView(GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        pins = Pin.objects.filter(user=request.user).select_related('exercise')
+        exercises = Exercise.objects.filter(user=request.user)
+        topic_stats = {}
+        
+        for pin in pins:
+            topic = pin.exercise.topic
+            points = _WEAKNESS_POINTS[(pin.exercise.difficulty, pin.user_difficulty)]
+            if topic not in topic_stats:
+                topic_stats[topic] = {"count": 0, "score": 0}
+            topic_stats[topic]["count"] += 1
+            topic_stats[topic]["score"] += points
+        topic_frequency = Counter(exercises.values_list("topic", flat=True))
+        
+        all_topics = set(topic_stats.keys()) | set(topic_frequency.keys())
+        
+        results = []
+
+        for topic in all_topics:
+            rated = topic_stats.get(topic) 
+
+            if rated and rated["count"] >= 3:
+                results.append({
+                    "topic": topic,
+                    "weakness_score": rated["score"],
+                    "based_on": "ratings",
+                    "sample_size": rated["count"],
+                })
+            elif topic_frequency[topic] >= 3:
+                results.append({
+                    "topic": topic,
+                    "weakness_score": topic_frequency[topic],
+                    "based_on": "frequency",
+                    "sample_size": topic_frequency[topic],
+                })
+        results.sort(key=lambda item: item["weakness_score"], reverse=True)
+        top_results = results[:5]
+
+        return Response(top_results, status=status.HTTP_200_OK)
+            

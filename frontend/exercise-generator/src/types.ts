@@ -11,6 +11,7 @@ export interface Exercise {
   my_note: string;
   hints: string[];
   is_pinned: boolean;
+  review_at: string | null;
 }
 
 export interface VerifyResult {

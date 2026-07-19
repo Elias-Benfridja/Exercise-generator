@@ -23,7 +23,10 @@ export interface Note {
 export interface TogglePinResponse {
   pinned: boolean;
   review_at?: string;
+  days?: number;
 }
+
+export type PinRating = "easy" | "medium" | "hard";
 
 export async function generateExercise(
   topic: string,
@@ -94,18 +97,51 @@ export async function saveNote(exerciseId: number, text: string): Promise<Note> 
   return response.data;
 }
 
-export async function togglePin(
+// Toggles a pin off (no arguments needed — the backend deletes any
+// existing Pin for this user+exercise regardless of body content).
+export async function unpinExercise(exerciseId: number): Promise<TogglePinResponse> {
+  const response = await apiClient.post<TogglePinResponse>(`/exercise/pin/${exerciseId}/`);
+  return response.data;
+}
+
+// Pins in "auto" mode: review interval is computed server-side from the
+// exercise's AI-assigned difficulty plus how hard the user found it.
+export async function pinExerciseAuto(
   exerciseId: number,
-  days?: number
+  rating: PinRating
 ): Promise<TogglePinResponse> {
-  const response = await apiClient.post<TogglePinResponse>(
-    `/exercise/pin/${exerciseId}/`,
-    days !== undefined ? { days } : {}
-  );
+  const response = await apiClient.post<TogglePinResponse>(`/exercise/pin/${exerciseId}/`, {
+    mode: "auto",
+    rating,
+  });
+  return response.data;
+}
+
+// Pins in "manual" mode: the user picks the exact number of days themselves.
+export async function pinExerciseManual(
+  exerciseId: number,
+  days: number
+): Promise<TogglePinResponse> {
+  const response = await apiClient.post<TogglePinResponse>(`/exercise/pin/${exerciseId}/`, {
+    mode: "manual",
+    days,
+  });
   return response.data;
 }
 
 export async function getDueReviews(): Promise<Exercise[]> {
   const response = await apiClient.get<Exercise[]>("/exercise/due-reviews/");
+  return response.data;
+}
+
+export interface TopicMasteryEntry {
+  topic: string;
+  weakness_score: number;
+  based_on: "ratings" | "frequency";
+  sample_size: number;
+}
+
+export async function getTopicMastery(): Promise<TopicMasteryEntry[]> {
+  const response = await apiClient.get<TopicMasteryEntry[]>("/exercise/topic-mastery/");
   return response.data;
 }

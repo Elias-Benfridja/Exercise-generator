@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { generateExercise } from "../api/exercises";
 import type { Exercise } from "../types";
 import ExerciseCard from "../components/ExerciseCard";
 
 export default function GeneratorPage() {
+  const location = useLocation();
   const [topic, setTopic] = useState<string>("");
   const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">(
     "medium",
@@ -12,6 +14,17 @@ export default function GeneratorPage() {
   const [predictedDifficulty, setPredictedDifficulty] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
+
+  // If we arrived here from a "Practice" click on a weak topic, prefill the
+  // topic field. Router state is cleared after reading so it doesn't stick
+  // around if the user navigates away and back.
+  useEffect(() => {
+    const state = location.state as { prefillTopic?: string } | null;
+    if (state?.prefillTopic) {
+      setTopic(state.prefillTopic);
+      window.history.replaceState({}, "");
+    }
+  }, [location.state]);
 
   async function handleSubmit() {
     if (!topic.trim()) {

@@ -2,7 +2,15 @@ import { useState } from "react";
 import type { Exercise, VerifyResult } from "../types";
 import DifficultyBadge from "./DifficultyBadge";
 import MathText from "./MathText";
-import { verifyExercise, toggleFavorite, saveNote, togglePin } from "../api/exercises";
+import {
+  verifyExercise,
+  toggleFavorite,
+  saveNote,
+  unpinExercise,
+  pinExerciseAuto,
+  pinExerciseManual,
+} from "../api/exercises";
+import type { PinRating } from "../api/exercises";
 import type { FormEvent } from "react";
 
 interface ExerciseCardProps {
@@ -40,8 +48,11 @@ export default function ExerciseCard({ exercise }: ExerciseCardProps) {
   // Pin state
   const [isPinned, setIsPinned] = useState(exercise.is_pinned);
   const [pinLoading, setPinLoading] = useState(false);
-  const [pinDaysOpen, setPinDaysOpen] = useState(false);
-  const [pinDays, setPinDays] = useState("7");
+  const [pinPickerOpen, setPinPickerOpen] = useState(false);
+  const [pinMode, setPinMode] = useState<"auto" | "manual">("auto");
+  const [pinRating, setPinRating] = useState<PinRating>("medium");
+  const [pinDays, setPinDays] = useState("3");
+  const [reviewAt, setReviewAt] = useState<string | null>(exercise.review_at);
 
   async function handleVerify() {
     setVerifying(true);
@@ -93,12 +104,13 @@ export default function ExerciseCard({ exercise }: ExerciseCardProps) {
     setIsCorrect(normalizeAnswer(userAnswer) === normalizeAnswer(exercise.answer_text));
   }
 
-  async function handleTogglePin() {
+  async function handlePinButtonClick() {
     if (isPinned) {
       setPinLoading(true);
       try {
-        const result = await togglePin(exercise.id);
+        const result = await unpinExercise(exercise.id);
         setIsPinned(result.pinned);
+        setReviewAt(null);
       } catch (err) {
         console.log(err);
       } finally {
@@ -106,22 +118,42 @@ export default function ExerciseCard({ exercise }: ExerciseCardProps) {
       }
       return;
     }
-    setPinDaysOpen((open) => !open);
+    setPinPickerOpen((open) => !open);
   }
 
   async function handleConfirmPin() {
-    const days = parseInt(pinDays, 10);
-    if (!days || days < 1) return;
     setPinLoading(true);
     try {
-      const result = await togglePin(exercise.id, days);
+      const result =
+        pinMode === "auto"
+          ? await pinExerciseAuto(exercise.id, pinRating)
+          : await pinExerciseManual(exercise.id, parseInt(pinDays, 10) || 1);
       setIsPinned(result.pinned);
-      setPinDaysOpen(false);
+      setReviewAt(result.review_at ?? null);
+      setPinPickerOpen(false);
     } catch (err) {
       console.log(err);
     } finally {
       setPinLoading(false);
     }
+  }
+
+  // Formats an ISO timestamp into a short, readable date for the
+  // always-visible review-date badge.
+  function formatReviewDate(iso: string): string {
+    const date = new Date(iso);
+    const today = new Date();
+    const diffMs = date.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+    const formatted = date.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    });
+
+    if (diffDays <= 0) return `${formatted} (due now)`;
+    if (diffDays === 1) return `${formatted} (tomorrow)`;
+    return `${formatted} (in ${diffDays} days)`;
   }
 
   return (
@@ -142,10 +174,10 @@ export default function ExerciseCard({ exercise }: ExerciseCardProps) {
           </span>
         </button>
 
-        <div className="flex items-center gap-2">
+        <div className="relative">
           <button
             type="button"
-            onClick={handleTogglePin}
+            onClick={handlePinButtonClick}
             disabled={pinLoading}
             aria-label={isPinned ? "Remove from review pins" : "Pin for review"}
             className="text-outline hover:text-tertiary transition-colors disabled:opacity-50"
@@ -158,23 +190,81 @@ export default function ExerciseCard({ exercise }: ExerciseCardProps) {
             </span>
           </button>
 
-          {pinDaysOpen && (
-            <div className="flex items-center gap-1 bg-surface-container-low rounded-md px-2 py-1">
-              <input
-                type="number"
-                min={1}
-                value={pinDays}
-                onChange={(e) => setPinDays(e.target.value)}
-                className="w-12 bg-transparent border-none text-sm text-on-surface focus:outline-none"
-              />
-              <span className="text-xs text-on-surface-variant">d</span>
+          {pinPickerOpen && (
+            <div className="absolute top-full right-0 mt-2 z-20 w-80 bg-surface-container-lowest border border-surface-container rounded-xl shadow-lg p-4 space-y-4">
+              {/* Auto / Manual toggle */}
+              <div className="bg-surface-container-low p-1.5 rounded-lg flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => setPinMode("auto")}
+                  className={`flex-1 text-sm font-semibold py-2 rounded-md transition-all ${
+                    pinMode === "auto"
+                      ? "bg-white text-primary shadow-sm"
+                      : "text-on-surface-variant hover:bg-surface-container-high"
+                  }`}
+                >
+                  Auto
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPinMode("manual")}
+                  className={`flex-1 text-sm font-semibold py-2 rounded-md transition-all ${
+                    pinMode === "manual"
+                      ? "bg-white text-primary shadow-sm"
+                      : "text-on-surface-variant hover:bg-surface-container-high"
+                  }`}
+                >
+                  Manual
+                </button>
+              </div>
+
+              {pinMode === "auto" ? (
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-on-surface-variant">
+                    How hard did you find it?
+                  </p>
+                  <div className="flex gap-2">
+                    {(["easy", "medium", "hard"] as PinRating[]).map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => setPinRating(option)}
+                        className={`flex-1 text-sm font-semibold py-2 rounded-md capitalize transition-all ${
+                          pinRating === option
+                            ? "bg-on-tertiary-container text-white"
+                            : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high"
+                        }`}
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-on-surface-variant">
+                    We'll pick a review date based on the exercise's difficulty and your rating.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-on-surface-variant">
+                    Review in how many days?
+                  </p>
+                  <input
+                    type="number"
+                    min={1}
+                    value={pinDays}
+                    onChange={(e) => setPinDays(e.target.value)}
+                    className="w-full bg-surface-container-low border-none rounded-md py-2.5 px-3 text-base text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={handleConfirmPin}
                 disabled={pinLoading}
-                className="bg-on-tertiary-container text-white text-xs font-semibold px-2 py-0.5 rounded-md hover:opacity-90 transition-all disabled:opacity-60"
+                className="w-full bg-on-tertiary-container text-white text-sm font-semibold py-2.5 rounded-md hover:opacity-90 transition-all disabled:opacity-60"
               >
-                Pin
+                {pinLoading ? "Pinning..." : "Pin for Review"}
               </button>
             </div>
           )}
@@ -188,6 +278,12 @@ export default function ExerciseCard({ exercise }: ExerciseCardProps) {
           <span className="font-label-md text-xs font-medium uppercase tracking-wider">
             Exercise #{exercise.id}
           </span>
+          {isPinned && reviewAt && (
+            <span className="flex items-center gap-1 text-xs font-semibold text-tertiary bg-amber-50 border border-amber-100 px-2.5 py-1 rounded-full">
+              <span className="material-symbols-outlined text-[14px]">push_pin</span>
+              Review: {formatReviewDate(reviewAt)}
+            </span>
+          )}
         </div>
         <div className="space-y-6">
           <p className="font-headline-md text-2xl font-semibold text-primary">

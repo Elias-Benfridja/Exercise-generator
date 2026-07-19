@@ -71,10 +71,23 @@ class Note(models.Model):
         unique_together = ('user', 'exercise')
     
 class Pin(models.Model):
+    class Mode(models.TextChoices):
+        AUTO = 'A', 'AUTO'
+        MANUAL = 'M', 'MANUAL'
+    
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     exercise = models.ForeignKey(Exercise, on_delete=models.CASCADE)
     pinned_at = models.DateTimeField(auto_now_add=True)
-    duration = models.IntegerField()
+    mode = models.CharField(
+        choices=Mode.choices,
+        max_length=1,
+    )
+    user_difficulty = models.CharField(
+        max_length=2,
+        choices=Exercise.Difficulty.choices,
+        null=True,
+        blank=True,
+    )
     review_at = models.DateTimeField()
 
     class Meta:
