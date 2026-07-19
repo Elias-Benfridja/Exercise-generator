@@ -202,6 +202,7 @@ class TopicMasteryView(GenericAPIView):
         
         for pin in pins:
             topic = pin.exercise.topic
+            if pin.user_difficulty is None: continue 
             points = _WEAKNESS_POINTS[(pin.exercise.difficulty, pin.user_difficulty)]
             if topic not in topic_stats:
                 topic_stats[topic] = {"count": 0, "score": 0}

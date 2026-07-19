@@ -4,6 +4,7 @@ import type { UploadExercisesResponse } from "../api/exercises";
 import ExerciseCard from "../components/ExerciseCard";
 import DifficultyBadge from "../components/DifficultyBadge";
 import MathText from "../components/MathText";
+import TopicMasteryCard from "../components/TopicMasteryCard";
 
 export default function TrendAnalysisPage() {
   const [currentInput, setCurrentInput] = useState<string>("");
@@ -233,6 +234,8 @@ export default function TrendAnalysisPage() {
               )}
             </div>
           </div>
+
+          <TopicMasteryCard />
         </aside>
       </div>
 
@@ -246,7 +249,7 @@ export default function TrendAnalysisPage() {
                 Suggested New Exercise
               </h3>
             </div>
-            <ExerciseCard exercise={result.suggested_exercise} />
+            <ExerciseCard key={result.suggested_exercise.id} exercise={result.suggested_exercise} />
           </div>
         </section>
       )}

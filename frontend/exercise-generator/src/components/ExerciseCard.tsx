@@ -218,31 +218,32 @@ export default function ExerciseCard({ exercise }: ExerciseCardProps) {
                 </button>
               </div>
 
-              {pinMode === "auto" ? (
-                <div className="space-y-2">
-                  <p className="text-sm font-semibold text-on-surface-variant">
-                    How hard did you find it?
-                  </p>
-                  <div className="flex gap-2">
-                    {(["easy", "medium", "hard"] as PinRating[]).map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        onClick={() => setPinRating(option)}
-                        className={`flex-1 text-sm font-semibold py-2 rounded-md capitalize transition-all ${
-                          pinRating === option
-                            ? "bg-on-tertiary-container text-white"
-                            : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high"
-                        }`}
-                      >
-                        {option}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-xs text-on-surface-variant">
-                    We'll pick a review date based on the exercise's difficulty and your rating.
-                  </p>
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-on-surface-variant">
+                  How hard did you find it?
+                </p>
+                <div className="flex gap-2">
+                  {(["easy", "medium", "hard"] as PinRating[]).map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setPinRating(option)}
+                      className={`flex-1 text-sm font-semibold py-2 rounded-md capitalize transition-all ${
+                        pinRating === option
+                          ? "bg-on-tertiary-container text-white"
+                          : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high"
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  ))}
                 </div>
+              </div>
+
+              {pinMode === "auto" ? (
+                <p className="text-xs text-on-surface-variant">
+                  We'll pick a review date based on the exercise's difficulty and your rating.
+                </p>
               ) : (
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-on-surface-variant">
@@ -273,10 +274,14 @@ export default function ExerciseCard({ exercise }: ExerciseCardProps) {
         <DifficultyBadge difficulty={exercise.difficulty} />
       </div>
       <div className="p-8 md:p-10">
-        <div className="flex items-center gap-3 mb-6 text-on-primary-container">
+        <div className="flex flex-wrap items-center gap-3 mb-6 text-on-primary-container">
           <span className="material-symbols-outlined">calculate</span>
           <span className="font-label-md text-xs font-medium uppercase tracking-wider">
             Exercise #{exercise.id}
+          </span>
+          <span className="text-outline">•</span>
+          <span className="font-label-md text-xs font-medium capitalize text-on-surface-variant">
+            {exercise.topic}
           </span>
           {isPinned && reviewAt && (
             <span className="flex items-center gap-1 text-xs font-semibold text-tertiary bg-amber-50 border border-amber-100 px-2.5 py-1 rounded-full">

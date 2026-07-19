@@ -173,7 +173,7 @@ export default function GeneratorPage() {
                 difficulty.
               </p>
             )}
-            <ExerciseCard exercise={result} />
+            <ExerciseCard key={result.id} exercise={result} />
           </>
         )}
       </div>
