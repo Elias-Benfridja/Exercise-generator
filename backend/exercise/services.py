@@ -29,6 +29,8 @@ _WEAKNESS_POINTS = {
     ('E', 'H'): 4, ('E', 'M'): 2, ('E', 'E'): 0,
 }
 
+RECENT_PIN_WINDOW = 5
+
 _ml_models_dir = os.path.join(os.path.dirname(__file__), "ml_models")
 _vectorizer = joblib.load(os.path.join(_ml_models_dir, "vectorizer.joblib"))
 _classifier = joblib.load(os.path.join(_ml_models_dir, "difficulty_classifier.joblib"))
@@ -73,17 +75,26 @@ final answer outright — it should set up the last step, not complete it.
 Use 3 to 5 hints depending on how many steps the exercise actually has.
 Wrap math notation in hints the same way as above (single dollar signs).
 
+Also identify the single most common mistake or misconception a student
+is likely to make on this specific type of problem — for example a sign
+error, forgetting a case, misapplying a formula, or a conceptual mix-up.
+Phrase it as a short, specific tip (one sentence) a tutor might give
+before the student starts, e.g. "Watch out for: forgetting to check
+both roots when factoring." Wrap math notation the same way as above.
+
 Return ONLY a single JSON object, no array, no markdown, no explanation, in exactly this format:
 {{
   "topic": "...",
   "question": "...",
   "answer": "...",
-  "hints": ["...", "...", "..."]
+  "hints": ["...", "...", "..."],
+  "common_misconception": "..."
 }}"""
 
 
-def get_exercise(topic: str, difficulty: str, user=None) -> dict:
-    examples = get_similar_exercises(topic)
+def get_exercise(topic: str, difficulty: str, user=None, examples: list = None) -> dict:
+    if examples is None:
+        examples = get_similar_exercises(topic)
     prompt = build_prompt(topic, difficulty, examples)
     try:
         response = client.models.generate_content(
@@ -106,6 +117,7 @@ def get_exercise(topic: str, difficulty: str, user=None) -> dict:
         answer_text=exercise["answer"],
         question_text=exercise["question"],
         hints=exercise.get("hints", []),
+        common_misconception=exercise.get("common_misconception", ""),
         source='G',
         user=user
     )
@@ -126,6 +138,10 @@ For each exercise below:
    more step than the last. Use 3 to 5 hints depending on how many
    steps the exercise actually has. The final hint should NOT state
    the final answer outright.
+5. Identify the single most common mistake or misconception a student
+   is likely to make on this specific type of problem — for example a
+   sign error, forgetting a case, misapplying a formula, or a
+   conceptual mix-up. Phrase it as a short, specific tip (one sentence).
 
 Rules:
 - Lesson names must be short (2-6 words), lowercase, and consistent —
@@ -140,8 +156,8 @@ Exercises:
 Return ONLY a JSON array, no markdown, no explanation, with exactly one
 object per exercise, in the same order, in this format:
 [
-  {{"index": 0, "lesson": "...", "difficulty": "...", "answer": "...", "hints": ["...", "..."]}},
-  {{"index": 1, "lesson": "...", "difficulty": "...", "answer": "...", "hints": ["...", "..."]}}
+  {{"index": 0, "lesson": "...", "difficulty": "...", "answer": "...", "hints": ["...", "..."], "common_misconception": "..."}},
+  {{"index": 1, "lesson": "...", "difficulty": "...", "answer": "...", "hints": ["...", "..."], "common_misconception": "..."}}
 ]"""
 
 
@@ -175,6 +191,7 @@ def tag_and_solve_exercises(exercises: list[str], user=None) -> str:
             question_text=exercises[i],
             answer_text=tag["answer"],
             hints=tag.get("hints", []),
+            common_misconception=tag.get("common_misconception", ""),
             source=Exercise.Source.UPLOADED,
             user=user
         ))
@@ -254,6 +271,10 @@ For each distinct exercise you can identify in this file:
    more step than the last. Use 3 to 5 hints depending on how many
    steps the exercise actually has. The final hint should NOT state
    the final answer outright.
+6. Identify the single most common mistake or misconception a student
+   is likely to make on this specific type of problem — for example a
+   sign error, forgetting a case, misapplying a formula, or a
+   conceptual mix-up. Phrase it as a short, specific tip (one sentence).
 
 Wrap all mathematical notation in single dollar signs for LaTeX rendering,
 e.g. "$x^2$", "$\\frac{2}{3}$".
@@ -264,7 +285,7 @@ Rules:
 
 Return ONLY a JSON array, no markdown, no explanation, in this format:
 [
-  {"question": "...", "lesson": "...", "difficulty": "...", "answer": "...", "hints": ["...", "..."]}
+  {"question": "...", "lesson": "...", "difficulty": "...", "answer": "...", "hints": ["...", "..."], "common_misconception": "..."}
 ]"""
 
 
@@ -297,6 +318,7 @@ def tag_and_solve_from_file(file_bytes: bytes, mime_type: str, user = None) -> l
             question_text=item["question"],
             answer_text=item["answer"],
             hints=item.get("hints", []),
+            common_misconception=item.get("common_misconception", ""),
             source=Exercise.Source.UPLOADED,
             user = user
         ))
@@ -307,3 +329,49 @@ def tag_and_solve_from_file(file_bytes: bytes, mime_type: str, user = None) -> l
 def get_auto_review_days(exercise_difficulty: str, user_difficulty: str) -> int:
     weight_sum = _DIFFICULTY_WEIGHT[exercise_difficulty] + _DIFFICULTY_WEIGHT[user_difficulty]
     return _INTERVAL_BY_WEIGHT_SUM[weight_sum]
+
+def build_trend_narrative_prompt(exercises: list) -> str:
+    listed = "\n".join(
+        f'- [{ex.difficulty}] {ex.topic}: {ex.question_text}'
+        for ex in exercises
+    )
+
+    return f"""You are a math tutor reviewing a batch of a student's practice exercises.
+
+Here are the exercises, each tagged with its difficulty and lesson topic:
+{listed}
+
+Write a short 2-3 sentence summary of the pattern across this batch. Focus on
+what concepts or skills these exercises collectively test, and call out any
+notable spread — for example if most exercises test one concept but a few
+also require a related or prerequisite skill, mention that as a possible gap.
+
+Write in plain, encouraging language directed at the student. Do not just
+restate which topic is most common — say something a good tutor would
+actually notice. Return ONLY the summary text, no markdown, no headers,
+no preamble."""
+
+def generate_trend_narrative(exercises: list) -> str:
+    prompt = build_trend_narrative_prompt(exercises)
+    try:
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt
+        )
+    except Exception as e:
+        raise Exception(f"Gemini API error: {str(e)}")
+    return response.text.strip()
+
+def get_suggested_exercises_per_topic(saved: list, user=None) -> list:
+    exercises_by_topic = {}
+    for exercise in saved:
+        exercises_by_topic.setdefault(exercise.topic, []).append(exercise)
+
+    suggestions = []
+    for topic, topic_exercises in exercises_by_topic.items():
+        difficulty_code = get_most_common(topic_exercises, "difficulty")
+        difficulty_label = Exercise.Difficulty.to_label(difficulty_code)
+        suggestion = get_exercise(topic, difficulty_label, user, examples=topic_exercises)
+        suggestions.append(suggestion)
+
+    return suggestions

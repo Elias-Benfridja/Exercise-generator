@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { uploadExercises, uploadExerciseFile } from "../api/exercises";
+import { uploadExercises, uploadExerciseFile, combineAnalysis } from "../api/exercises";
 import type { UploadExercisesResponse } from "../api/exercises";
 import ExerciseCard from "../components/ExerciseCard";
 import DifficultyBadge from "../components/DifficultyBadge";
@@ -9,9 +9,12 @@ import TopicMasteryCard from "../components/TopicMasteryCard";
 export default function TrendAnalysisPage() {
   const [currentInput, setCurrentInput] = useState<string>("");
   const [exercises, setExercises] = useState<string[]>([]);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [result, setResult] = useState<UploadExercisesResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [fileProgress, setFileProgress] = useState<{ current: number; total: number } | null>(
+    null
+  );
   const [error, setError] = useState<string>("");
 
   function handleAddExercise() {
@@ -46,21 +49,45 @@ export default function TrendAnalysisPage() {
     }
   }
 
+  function handleRemoveFile(indexToRemove: number) {
+    setSelectedFiles(selectedFiles.filter((_, i) => i !== indexToRemove));
+  }
+
   async function handleFileUpload() {
-    if (!selectedFile) {
-      setError("Please choose a file first");
+    if (selectedFiles.length === 0) {
+      setError("Please choose at least one file");
       return;
     }
     setLoading(true);
     setError("");
+    setFileProgress({ current: 0, total: selectedFiles.length });
+
+    const allExerciseIds: number[] = [];
+    let lastSingleFileResponse: UploadExercisesResponse | null = null;
+
     try {
-      const response = await uploadExerciseFile(selectedFile);
-      setResult(response);
+      for (let i = 0; i < selectedFiles.length; i++) {
+        setFileProgress({ current: i + 1, total: selectedFiles.length });
+        const response = await uploadExerciseFile(selectedFiles[i]);
+        allExerciseIds.push(...response.tagged_exercises.map((ex) => ex.id));
+        lastSingleFileResponse = response;
+      }
+
+      // A single file's own response already has the full trend analysis
+      // computed server-side — reuse it directly rather than re-uploading
+      // or making an unnecessary extra combine call.
+      const combined =
+        selectedFiles.length === 1 && lastSingleFileResponse
+          ? lastSingleFileResponse
+          : await combineAnalysis(allExerciseIds);
+
+      setResult(combined);
     } catch (err) {
-      setError("Error analyzing file");
+      setError("Error analyzing files");
       console.log(err);
     } finally {
       setLoading(false);
+      setFileProgress(null);
     }
   }
 
@@ -74,28 +101,64 @@ export default function TrendAnalysisPage() {
               Add Practice Problems
             </h2>
             <p className="text-on-surface-variant mb-6">
-              Add exercises one at a time, or upload an exam file, then analyze the batch to find trends.
+              Add exercises one at a time, or upload one or more exam files —
+              even years' worth — then analyze the batch to find trends across all of them.
             </p>
 
             {/* File upload */}
             <div className="mb-6 pb-6 border-b border-[#F0EFEB]">
               <label className="font-label-md text-sm font-semibold text-on-surface-variant block mb-3">
-                Upload an exam file (image or PDF)
+                Upload exam files (images or PDFs) — select multiple to find
+                patterns across several exams at once
               </label>
-              <div className="flex gap-3">
-                <input
-                  type="file"
-                  accept="image/*,application/pdf"
-                  onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
-                  className="flex-1 text-sm text-on-surface-variant file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-surface-container-high file:text-primary file:text-sm file:font-semibold hover:file:bg-surface-container"
-                />
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                multiple
+                onChange={(e) => {
+                  const newFiles = Array.from(e.target.files ?? []);
+                  setSelectedFiles([...selectedFiles, ...newFiles]);
+                  e.target.value = "";
+                }}
+                className="w-full text-sm text-on-surface-variant file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-surface-container-high file:text-primary file:text-sm file:font-semibold hover:file:bg-surface-container"
+              />
+
+              {selectedFiles.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  {selectedFiles.map((file, i) => (
+                    <div
+                      key={`${file.name}-${i}`}
+                      className="flex items-center justify-between gap-3 p-3 rounded-lg bg-surface border border-[#F0EFEB]"
+                    >
+                      <span className="text-sm text-on-surface truncate">{file.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFile(i)}
+                        disabled={loading}
+                        className="text-outline hover:text-error transition-colors shrink-0 disabled:opacity-40"
+                      >
+                        <span className="material-symbols-outlined text-lg">close</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-4">
                 <button
                   type="button"
                   onClick={handleFileUpload}
-                  disabled={loading || !selectedFile}
-                  className="bg-on-tertiary-container text-on-tertiary px-6 py-2 rounded-lg font-label-md text-sm font-semibold hover:opacity-90 transition-all active:scale-95 shadow-sm disabled:opacity-50 shrink-0"
+                  disabled={loading || selectedFiles.length === 0}
+                  className="w-full bg-on-tertiary-container text-on-tertiary px-6 py-2 rounded-lg font-label-md text-sm font-semibold hover:opacity-90 transition-all active:scale-95 shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  Upload &amp; Analyze
+                  {loading && fileProgress ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                      Analyzing file {fileProgress.current} of {fileProgress.total}...
+                    </>
+                  ) : (
+                    `Upload & Analyze${selectedFiles.length > 1 ? ` (${selectedFiles.length} files)` : ""}`
+                  )}
                 </button>
               </div>
             </div>
@@ -221,8 +284,10 @@ export default function TrendAnalysisPage() {
               <h2 className="font-headline-lg text-3xl font-bold mb-2">
                 {result ? result.trending_lesson : "Awaiting analysis"}
               </h2>
-              <p className="text-on-primary-container mb-6 opacity-80 italic">
-                Most frequently appearing pattern in your uploaded exercises.
+              <p className="text-on-primary-container mb-6 opacity-90">
+                {result
+                  ? result.trend_narrative
+                  : "Add or upload some exercises to see a summary of the patterns across them."}
               </p>
               {result && (
                 <div className="flex items-center gap-3">
@@ -239,17 +304,23 @@ export default function TrendAnalysisPage() {
         </aside>
       </div>
 
-      {/* Suggested New Exercise */}
+      {/* Suggested New Exercises */}
       {result && (
         <section className="mt-6">
           <div className="bg-surface-container-lowest p-8 rounded-xl shadow-[0px_4px_20px_rgba(24,29,58,0.04)] border-2 border-tertiary/10">
             <div className="flex items-center gap-3 mb-4">
               <span className="material-symbols-outlined text-on-tertiary-container">auto_awesome</span>
               <h3 className="font-headline-md text-2xl font-semibold text-primary">
-                Suggested New Exercise
+                {result.suggested_exercises.length > 1
+                  ? "Suggested New Exercises"
+                  : "Suggested New Exercise"}
               </h3>
             </div>
-            <ExerciseCard key={result.suggested_exercise.id} exercise={result.suggested_exercise} />
+            <div className="space-y-6">
+              {result.suggested_exercises.map((suggestion) => (
+                <ExerciseCard key={suggestion.id} exercise={suggestion} />
+              ))}
+            </div>
           </div>
         </section>
       )}

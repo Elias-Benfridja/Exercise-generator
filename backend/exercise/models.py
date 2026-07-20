@@ -60,6 +60,7 @@ class Exercise(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
     favorited_by = models.ManyToManyField(User, related_name="favorites", blank=True)
     hints = models.JSONField(default=list, blank=True)
+    common_misconception = models.TextField(blank=True, default="")
     
     
 class Note(models.Model):

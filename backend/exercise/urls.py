@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import ExerciseView, AllExercisesView, MyDueReviewsView, PinToggleView, UploadExercisesView, VerifyExerciseView, UploadFileView, FavoriteToggleView, MyHistoryView, MyFavoritesView, NoteView, TopicMasteryView
+from .views import ExerciseView, AllExercisesView, MyDueReviewsView, PinToggleView, UploadExercisesView, VerifyExerciseView, UploadFileView, FavoriteToggleView, MyHistoryView, MyFavoritesView, NoteView, TopicMasteryView, CombineAnalysisView
 
 urlpatterns = [
     path('generate/', ExerciseView.as_view(), name = "exercise"),
@@ -13,5 +13,6 @@ urlpatterns = [
     path('note/<int:exercise_id>/', NoteView.as_view(), name="note"),
     path('pin/<int:exercise_id>/', PinToggleView.as_view(), name="toggle-pin"),
     path('due-reviews/', MyDueReviewsView.as_view(), name="due-reviews"),
-    path('topic-mastery/', TopicMasteryView.as_view(), name="topic-mastery")
+    path('topic-mastery/', TopicMasteryView.as_view(), name="topic-mastery"),
+    path('combine-analysis/', CombineAnalysisView.as_view(), name="combine-analysis")
 ]

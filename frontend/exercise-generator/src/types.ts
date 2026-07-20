@@ -12,6 +12,7 @@ export interface Exercise {
   hints: string[];
   is_pinned: boolean;
   review_at: string | null;
+  common_misconception: string;
 }
 
 export interface VerifyResult {

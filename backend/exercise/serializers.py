@@ -4,7 +4,7 @@ from .models import Exercise, Note, Pin
 class ExerciseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Exercise
-        fields = ['id', 'answer_text', 'source', 'topic', 'difficulty', 'question_text', 'is_favorited', 'is_pinned', 'review_at', 'my_note', 'hints']
+        fields = ['id', 'answer_text', 'source', 'topic', 'difficulty', 'question_text', 'is_favorited', 'is_pinned', 'review_at', 'my_note', 'hints', 'common_misconception']
     
     is_favorited = serializers.SerializerMethodField()
     my_note = serializers.SerializerMethodField()
@@ -61,3 +61,6 @@ class PinSerializer(serializers.Serializer):
         if data["mode"] == "manual" and "days" not in data:
             raise serializers.ValidationError("days is required when mode is 'manual'")
         return data
+    
+class CombineAnalysisSerializer(serializers.Serializer):
+    exercise_ids = serializers.ListField(child=serializers.IntegerField())

@@ -11,7 +11,8 @@ export interface UploadExercisesResponse {
   tagged_exercises: Exercise[];
   trending_lesson: string;
   trending_difficulty: "easy" | "medium" | "hard";
-  suggested_exercise: Exercise;
+  suggested_exercises: Exercise[];
+  trend_narrative: string;
 }
 
 export interface Note {
@@ -68,6 +69,18 @@ export async function uploadExerciseFile(
       },
     }
   );
+  return response.data;
+}
+
+// Combines exercises from multiple already-tagged files (or batches) into
+// one pooled trend analysis. Exercise IDs come from prior uploadExerciseFile
+// calls.
+export async function combineAnalysis(
+  exerciseIds: number[]
+): Promise<UploadExercisesResponse> {
+  const response = await apiClient.post<UploadExercisesResponse>("/exercise/combine-analysis/", {
+    exercise_ids: exerciseIds,
+  });
   return response.data;
 }
 

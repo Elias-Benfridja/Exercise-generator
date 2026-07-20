@@ -41,6 +41,9 @@ export default function ExerciseCard({ exercise }: ExerciseCardProps) {
   // Hints state
   const [revealedHints, setRevealedHints] = useState(0);
 
+  // Common misconception state
+  const [misconceptionOpen, setMisconceptionOpen] = useState(false);
+
   // Answer-check state
   const [userAnswer, setUserAnswer] = useState("");
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
@@ -406,6 +409,29 @@ export default function ExerciseCard({ exercise }: ExerciseCardProps) {
                     </p>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {exercise.common_misconception && (
+              <button
+                type="button"
+                onClick={() => setMisconceptionOpen((open) => !open)}
+                className="flex items-center gap-2 font-label-md text-sm font-semibold text-error hover:text-primary transition-colors"
+              >
+                <span className="material-symbols-outlined">warning</span>
+                {misconceptionOpen ? "Hide Mistakes to Avoid" : "Show Mistakes to Avoid"}
+              </button>
+            )}
+
+            {exercise.common_misconception && misconceptionOpen && (
+              <div className="w-full mt-2 p-4 bg-red-50 border border-red-100 rounded-lg flex gap-3">
+                <span className="material-symbols-outlined text-error text-[18px] shrink-0">
+                  warning
+                </span>
+                <p className="text-sm text-red-900">
+                  <span className="font-semibold">Watch out for: </span>
+                  <MathText text={exercise.common_misconception} />
+                </p>
               </div>
             )}
 
