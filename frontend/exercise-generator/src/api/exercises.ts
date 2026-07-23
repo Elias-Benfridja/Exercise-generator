@@ -150,11 +150,21 @@ export async function getDueReviews(): Promise<Exercise[]> {
 export interface TopicMasteryEntry {
   topic: string;
   weakness_score: number;
-  based_on: "ratings" | "frequency";
+  based_on: "ratings";
   sample_size: number;
 }
 
 export async function getTopicMastery(): Promise<TopicMasteryEntry[]> {
   const response = await apiClient.get<TopicMasteryEntry[]>("/exercise/topic-mastery/");
+  return response.data;
+}
+
+// Generates one exercise for a weak topic directly, using the user's own
+// exercises on that topic as the style/difficulty blueprint — no manual
+// topic entry or difficulty pick needed.
+export async function practiceWeakness(topic: string): Promise<Exercise> {
+  const response = await apiClient.post<Exercise>("/exercise/practice-weakness/", {
+    topic,
+  });
   return response.data;
 }

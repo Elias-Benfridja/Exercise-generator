@@ -15,13 +15,23 @@ export default function GeneratorPage() {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
 
-  // If we arrived here from a "Practice" click on a weak topic, prefill the
-  // topic field. Router state is cleared after reading so it doesn't stick
-  // around if the user navigates away and back.
+  // If we arrived here from a "Practice" click on a weak topic, an
+  // exercise has already been generated server-side — show it directly.
+  // Router state is cleared after reading so it doesn't stick around if
+  // the user navigates away and back.
   useEffect(() => {
-    const state = location.state as { prefillTopic?: string } | null;
-    if (state?.prefillTopic) {
-      setTopic(state.prefillTopic);
+    const state = location.state as { generatedExercise?: Exercise } | null;
+    if (state?.generatedExercise) {
+      setResult(state.generatedExercise);
+      setPredictedDifficulty(null);
+      setTopic(state.generatedExercise.topic);
+      setDifficulty(
+        state.generatedExercise.difficulty === "E"
+          ? "easy"
+          : state.generatedExercise.difficulty === "H"
+          ? "hard"
+          : "medium"
+      );
       window.history.replaceState({}, "");
     }
   }, [location.state]);

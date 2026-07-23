@@ -1,5 +1,3 @@
-from collections import Counter
-
 from .services import get_exercise, tag_and_solve_exercises, get_most_common, verify_exercise, predict_difficulty, tag_and_solve_from_file, get_auto_review_days, generate_trend_narrative, get_suggested_exercises_per_topic, _WEAKNESS_POINTS, RECENT_PIN_WINDOW
 from .serializers import ExercisePostSerializer, ExerciseSerializer, ExerciseUploadSerializer, NoteSerializer, PinSerializer, CombineAnalysisSerializer
 from .models import Exercise, Note, Pin
@@ -37,6 +35,33 @@ class ExerciseView(GenericAPIView):
                 "exercise": exercise_data,
                 "predicted_difficulty": predicted_difficulty,
             },
+            status=status.HTTP_200_OK,
+        )
+    
+class PracticeWeaknessView(GenericAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        topic = request.data.get("topic")
+        if not topic:
+            return Response({"error": "topic is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        topic_exercises = list(Exercise.objects.filter(user=request.user, topic=topic))
+        if not topic_exercises:
+            return Response(
+                {"error": f"No exercises found for topic '{topic}'"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            difficulty_code = get_most_common(topic_exercises, "difficulty")
+            difficulty_label = Exercise.Difficulty.to_label(difficulty_code)
+            exercise = get_exercise(topic, difficulty_label, request.user, examples=topic_exercises)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response(
+            ExerciseSerializer(exercise, context={'request': request}).data,
             status=status.HTTP_200_OK,
         )
     
@@ -158,13 +183,13 @@ class MyFavoritesView(ListAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = ExerciseSerializer
     def get_queryset(self):
-        return self.request.user.favorites.all()
+        return self.request.user.favorites.all().order_by('-created_at')
     
 class MyHistoryView(ListAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = ExerciseSerializer
     def get_queryset(self):
-        return Exercise.objects.filter(user=self.request.user)
+        return Exercise.objects.filter(user=self.request.user).order_by('-created_at')
     
 class NoteView(GenericAPIView):
     permission_classes = [IsAuthenticated]
@@ -231,7 +256,6 @@ class TopicMasteryView(GenericAPIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):
         pins = Pin.objects.filter(user=request.user).select_related('exercise').order_by('-pinned_at')
-        exercises = Exercise.objects.filter(user=request.user)
         pins_by_topic = {}
         
         for pin in pins:
@@ -239,41 +263,23 @@ class TopicMasteryView(GenericAPIView):
                 continue
             pins_by_topic.setdefault(pin.exercise.topic, []).append(pin)
 
-        topic_stats = {}
+        results = []
         for topic, topic_pins in pins_by_topic.items():
             recent_pins = topic_pins[:RECENT_PIN_WINDOW]
+            if len(recent_pins) < 3:
+                continue
             score = sum(
                 _WEAKNESS_POINTS[(pin.exercise.difficulty, pin.user_difficulty)]
                 for pin in recent_pins
             )
-            topic_stats[topic] = {"count": len(recent_pins), "score": score}
-            
-            
-        topic_frequency = Counter(exercises.values_list("topic", flat=True))
-        
-        all_topics = set(topic_stats.keys()) | set(topic_frequency.keys())
-        
-        results = []
+            results.append({
+                "topic": topic,
+                "weakness_score": score,
+                "based_on":  "ratings",
+                "sample_size": len(recent_pins),
+            })
 
-        for topic in all_topics:
-            rated = topic_stats.get(topic) 
-
-            if rated and rated["count"] >= 3:
-                results.append({
-                    "topic": topic,
-                    "weakness_score": rated["score"],
-                    "based_on": "ratings",
-                    "sample_size": rated["count"],
-                })
-            elif topic_frequency[topic] >= 3:
-                results.append({
-                    "topic": topic,
-                    "weakness_score": topic_frequency[topic],
-                    "based_on": "frequency",
-                    "sample_size": topic_frequency[topic],
-                })
         results.sort(key=lambda item: item["weakness_score"], reverse=True)
         top_results = results[:5]
 
         return Response(top_results, status=status.HTTP_200_OK)
-            

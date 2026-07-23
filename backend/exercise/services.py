@@ -1,6 +1,7 @@
 import os 
 import json
 from google import genai
+from groq import Groq
 from dotenv import load_dotenv
 from .models import Exercise
 from collections import Counter
@@ -10,7 +11,16 @@ from django.contrib.auth.models import User
 
 load_dotenv()
 
-client = genai.Client(api_key=os.environ.get('GEMINI_API_KEY'))
+# Gemini is kept only for tag_and_solve_from_file, since it's the one
+# function that sends raw file bytes (PDF/image) for multimodal
+# understanding — Groq's free tier doesn't support PDF input.
+gemini_client = genai.Client(api_key=os.environ.get('GEMINI_API_KEY'))
+
+# Groq handles every plain-text generation/tagging call, since its free
+# tier has no credit-card requirement and higher practical throughput
+# for demo purposes than Gemini's free tier.
+groq_client = Groq(api_key=os.environ.get('GROQ_API_KEY'))
+GROQ_MODEL = "llama-3.3-70b-versatile"
 
 
 _DIFFICULTY_WEIGHT = {"E": 3, "M": 2, "H": 1}
@@ -82,6 +92,17 @@ Phrase it as a short, specific tip (one sentence) a tutor might give
 before the student starts, e.g. "Watch out for: forgetting to check
 both roots when factoring." Wrap math notation the same way as above.
 
+Also determine a short, general topic label for this exercise (2-6 words,
+lowercase) — but keep it at the level of a textbook chapter or unit, NOT
+a narrow sub-skill. For example, use "limits" rather than "squeeze
+theorem", "integration techniques" rather than "integration by parts",
+"quadratic equations" rather than "completing the square". Ignore extra
+descriptive words the user may have included in their request (e.g. if
+the request was "quadratic equations exercises that use the discriminant",
+the label should just be "quadratic equations"). Use consistent, standard
+terminology so exercises testing related sub-skills within the same unit
+all get grouped under the same broader label.
+
 Return ONLY a single JSON object, no array, no markdown, no explanation, in exactly this format:
 {{
   "topic": "...",
@@ -97,22 +118,22 @@ def get_exercise(topic: str, difficulty: str, user=None, examples: list = None) 
         examples = get_similar_exercises(topic)
     prompt = build_prompt(topic, difficulty, examples)
     try:
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt
+        response = groq_client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
         )
     except Exception as e:
-        raise Exception(f"Gemini API error: {str(e)}")
-    raw = response.text.strip()
+        raise Exception(f"Groq API error: {str(e)}")
+    raw = response.choices[0].message.content.strip()
     start = raw.index('{')
     end = raw.rindex('}') + 1
     raw = raw[start:end]
     try:
         exercise = json.loads(raw)
     except Exception as e:
-        raise Exception(f"Failed to parse Gemini response: {raw}") from e
+        raise Exception(f"Failed to parse Groq response: {raw}") from e
     saved_exercise = Exercise.objects.create(
-        topic=topic.lower(),
+        topic=exercise.get("topic", topic).lower(),
         difficulty=Exercise.Difficulty.from_label(difficulty),
         answer_text=exercise["answer"],
         question_text=exercise["question"],
@@ -128,9 +149,12 @@ def build_tagging_prompt(exercises: list[str]) -> str:
     return f"""You are a math curriculum classifier and solver.
 
 For each exercise below:
-1. Identify the specific lesson or concept it tests
-   (e.g. "solving quadratic equations by factoring", "law of cosines",
-   "integration by substitution").
+1. Identify the broader lesson or unit it belongs to — think textbook
+   chapter level, NOT a narrow sub-skill. For example, use "limits"
+   rather than "squeeze theorem", "integration techniques" rather than
+   "integration by substitution", "quadratic equations" rather than
+   "solving quadratic equations by factoring", "trigonometric identities"
+   rather than "law of cosines".
 2. Determine its difficulty.
 3. Solve it and give the final answer.
 4. Produce a list of hints that guide a student toward the solution
@@ -145,7 +169,8 @@ For each exercise below:
 
 Rules:
 - Lesson names must be short (2-6 words), lowercase, and consistent —
-  use the same exact wording for exercises testing the same concept.
+  use the same exact wording for exercises testing related sub-skills
+  within the same broader unit, so they all group under one label.
 - Difficulty must be exactly one of: "easy", "medium", "hard".
 - The answer must be a single final value or simplified expression,
   not a worked solution.
@@ -164,21 +189,21 @@ object per exercise, in the same order, in this format:
 def tag_and_solve_exercises(exercises: list[str], user=None) -> str:
     prompt = build_tagging_prompt(exercises)
     try:
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt
+        response = groq_client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
         )
     except Exception as e:
-        raise Exception(f"Gemini API error: {str(e)}")
+        raise Exception(f"Groq API error: {str(e)}")
     # Clean and parse response
-    raw = response.text.strip()
+    raw = response.choices[0].message.content.strip()
     start = raw.index('[')
     end = raw.rindex(']') + 1
     raw = raw[start:end]
     try:
         tags = json.loads(raw)
     except Exception as e:
-        raise Exception(f"Failed to parse Gemini response: {raw}") from e
+        raise Exception(f"Failed to parse Groq response: {raw}") from e
     # Save cache
     saved = []
     for tag in tags:
@@ -228,14 +253,14 @@ Problem: {exercise.question_text}"""
     answers = []
     for _ in range(3):
         try:
-            result = client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=prompt
+            result = groq_client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[{"role": "user", "content": prompt}],
             )
-            normalized = result.text.strip().lower().replace(" ", "")
+            normalized = result.choices[0].message.content.strip().lower().replace(" ", "")
             answers.append(normalized)
         except Exception as e:
-            raise Exception(f"Gemini API error: {str(e)}")
+            raise Exception(f"Groq API error: {str(e)}")
 
     counts = Counter(answers)
     consensus, votes = counts.most_common(1)[0]
@@ -262,8 +287,12 @@ def build_file_tagging_prompt() -> str:
 
 For each distinct exercise you can identify in this file:
 1. Transcribe the exercise's question text.
-2. Identify the specific lesson or concept it tests
-   (e.g. "solving quadratic equations by factoring", "law of cosines").
+2. Identify the broader lesson or unit it belongs to — think textbook
+   chapter level, NOT a narrow sub-skill. For example, use "limits"
+   rather than "squeeze theorem", "integration techniques" rather than
+   "integration by substitution", "quadratic equations" rather than
+   "solving quadratic equations by factoring", "trigonometric identities"
+   rather than "law of cosines".
 3. Determine its difficulty: "easy", "medium", or "hard".
 4. Solve it and give the final answer.
 5. Produce a list of hints that guide a student toward the solution
@@ -280,7 +309,9 @@ Wrap all mathematical notation in single dollar signs for LaTeX rendering,
 e.g. "$x^2$", "$\\frac{2}{3}$".
 
 Rules:
-- Lesson names must be short (2-6 words), lowercase, and consistent.
+- Lesson names must be short (2-6 words), lowercase, and consistent —
+  use the same exact wording for exercises testing related sub-skills
+  within the same broader unit, so they all group under one label.
 - Ignore anything in the file that isn't a math exercise (headers, instructions, page numbers).
 
 Return ONLY a JSON array, no markdown, no explanation, in this format:
@@ -294,7 +325,7 @@ def tag_and_solve_from_file(file_bytes: bytes, mime_type: str, user = None) -> l
     file_part = types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
 
     try:
-        response = client.models.generate_content(
+        response = gemini_client.models.generate_content(
             model='gemini-2.5-flash',
             contents=[prompt, file_part]
         )
@@ -354,13 +385,13 @@ no preamble."""
 def generate_trend_narrative(exercises: list) -> str:
     prompt = build_trend_narrative_prompt(exercises)
     try:
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt
+        response = groq_client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
         )
     except Exception as e:
-        raise Exception(f"Gemini API error: {str(e)}")
-    return response.text.strip()
+        raise Exception(f"Groq API error: {str(e)}")
+    return response.choices[0].message.content.strip()
 
 def get_suggested_exercises_per_topic(saved: list, user=None) -> list:
     exercises_by_topic = {}
