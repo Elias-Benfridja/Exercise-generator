@@ -3,7 +3,7 @@ import os
 
 DEBUG = False
 
-ALLOWED_HOSTS = ['https://exercise-generator-qq0h.onrender.com']
+ALLOWED_HOSTS = ['exercise-generator-qq0h.onrender.com', '.onrender.com']
 
 DATABASES = {
     'default': {
