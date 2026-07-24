@@ -19,7 +19,7 @@ DATABASES = {
     }
 }
 
-CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',')
+CORS_ALLOW_ALL_ORIGINS = True
 
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STORAGES = {
