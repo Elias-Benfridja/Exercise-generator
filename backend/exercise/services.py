@@ -1,5 +1,6 @@
 import os 
 import json
+import re
 from google import genai
 from groq import Groq
 from dotenv import load_dotenv
@@ -11,16 +12,52 @@ from django.contrib.auth.models import User
 
 load_dotenv()
 
-# Gemini is kept only for tag_and_solve_from_file, since it's the one
-# function that sends raw file bytes (PDF/image) for multimodal
-# understanding — Groq's free tier doesn't support PDF input.
+
 gemini_client = genai.Client(api_key=os.environ.get('GEMINI_API_KEY'))
 
-# Groq handles every plain-text generation/tagging call, since its free
-# tier has no credit-card requirement and higher practical throughput
-# for demo purposes than Gemini's free tier.
+
 groq_client = Groq(api_key=os.environ.get('GROQ_API_KEY'))
 GROQ_MODEL = "llama-3.3-70b-versatile"
+
+
+_VALID_JSON_ESCAPE_CHARS = '"\\/bfnrtu'
+
+
+def fix_json_backslashes(raw: str) -> str:
+    """Doubles any backslash that isn't part of a valid JSON escape
+    sequence, so LaTeX-heavy model output (\\Delta, \\vec, \\sqrt, etc.)
+    doesn't break json.loads.
+
+    Must walk the string and consume valid \\X escape pairs as a single
+    atomic unit. A regex like r'\\(?!["\\/bfnrtu])' looks tempting but is
+    wrong: given an already-correctly-doubled "\\in" (backslash, backslash,
+    i, n), it leaves the first backslash alone (next char is a backslash,
+    which looks like a valid escape) but then evaluates the second
+    backslash on its own (next char is "i", not a valid escape) and
+    doubles just that one — turning a valid 2-backslash pair into an
+    invalid 3-backslash sequence. Letters that happen to be valid escape
+    chars themselves (f, n, r, t, b, u) mask the bug for commands like
+    \\frac, which is why only some LaTeX commands (\\in, \\Delta, \\pm,
+    \\infty, \\cup, \\sqrt, \\vec, ...) were breaking json.loads.
+    """
+    result = []
+    i, n = 0, len(raw)
+    while i < n:
+        ch = raw[i]
+        if ch == '\\' and i + 1 < n and raw[i + 1] in _VALID_JSON_ESCAPE_CHARS:
+            # Already a valid escape pair -- consume both chars untouched.
+            result.append(ch)
+            result.append(raw[i + 1])
+            i += 2
+            continue
+        if ch == '\\':
+            # Stray backslash starting a LaTeX command -- double it.
+            result.append('\\\\')
+            i += 1
+            continue
+        result.append(ch)
+        i += 1
+    return ''.join(result)
 
 
 _DIFFICULTY_WEIGHT = {"E": 3, "M": 2, "H": 1}
@@ -103,6 +140,13 @@ the label should just be "quadratic equations"). Use consistent, standard
 terminology so exercises testing related sub-skills within the same unit
 all get grouped under the same broader label.
 
+CRITICAL JSON FORMATTING: your text will contain LaTeX commands like
+\\frac, \\sqrt, \\Delta, each starting with a single backslash. Since a
+single backslash is not valid inside a JSON string, every one of those
+backslashes must be written TWICE in your output — e.g. write \\\\frac
+instead of \\frac, and \\\\Delta instead of \\Delta — so the result is
+valid, parseable JSON.
+
 Return ONLY a single JSON object, no array, no markdown, no explanation, in exactly this format:
 {{
   "topic": "...",
@@ -127,7 +171,7 @@ def get_exercise(topic: str, difficulty: str, user=None, examples: list = None) 
     raw = response.choices[0].message.content.strip()
     start = raw.index('{')
     end = raw.rindex('}') + 1
-    raw = raw[start:end]
+    raw = fix_json_backslashes(raw[start:end])
     try:
         exercise = json.loads(raw)
     except Exception as e:
@@ -178,6 +222,13 @@ Rules:
 Exercises:
 {numbered}
 
+CRITICAL JSON FORMATTING: exercises and answers may contain LaTeX
+commands like \\frac, \\sqrt, \\vec, \\Delta, each starting with a single
+backslash. Since a single backslash is not valid inside a JSON string,
+every one of those backslashes must be written TWICE in your output —
+e.g. write \\\\frac instead of \\frac, and \\\\Delta instead of \\Delta —
+so the result is valid, parseable JSON.
+
 Return ONLY a JSON array, no markdown, no explanation, with exactly one
 object per exercise, in the same order, in this format:
 [
@@ -199,7 +250,7 @@ def tag_and_solve_exercises(exercises: list[str], user=None) -> str:
     raw = response.choices[0].message.content.strip()
     start = raw.index('[')
     end = raw.rindex(']') + 1
-    raw = raw[start:end]
+    raw = fix_json_backslashes(raw[start:end])
     try:
         tags = json.loads(raw)
     except Exception as e:
@@ -314,6 +365,13 @@ Rules:
   within the same broader unit, so they all group under one label.
 - Ignore anything in the file that isn't a math exercise (headers, instructions, page numbers).
 
+CRITICAL JSON FORMATTING: exercises and answers may contain LaTeX
+commands like \\frac, \\sqrt, \\vec, \\Delta, each starting with a single
+backslash. Since a single backslash is not valid inside a JSON string,
+every one of those backslashes must be written TWICE in your output —
+e.g. write \\\\frac instead of \\frac, and \\\\Delta instead of \\Delta —
+so the result is valid, parseable JSON.
+
 Return ONLY a JSON array, no markdown, no explanation, in this format:
 [
   {"question": "...", "lesson": "...", "difficulty": "...", "answer": "...", "hints": ["...", "..."], "common_misconception": "..."}
@@ -335,7 +393,7 @@ def tag_and_solve_from_file(file_bytes: bytes, mime_type: str, user = None) -> l
     raw = response.text.strip()
     start = raw.index('[')
     end = raw.rindex(']') + 1
-    raw = raw[start:end]
+    raw = fix_json_backslashes(raw[start:end])
     try:
         tagged = json.loads(raw)
     except Exception as e:

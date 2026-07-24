@@ -1,0 +1,98 @@
+# MathGen
+
+AI-powered math exercise generator and practice analyzer, built for the July AI Challenge hackathon.
+
+MathGen doesn't just generate practice problems — it tracks what you're actually struggling with over time, tells you *why* you're struggling with it, and closes the loop by generating targeted practice for exactly that weak spot.
+
+## Features
+
+### Exercise Generator
+- Generate a math exercise on any topic, at Easy/Medium/Hard difficulty
+- Retrieval-grounded generation — pulls similar exercises from a seed dataset (or, when relevant, your own past exercises) to guide style and difficulty calibration
+- An advisory ML difficulty classifier cross-checks the AI's assigned difficulty against its own prediction
+- Every exercise ships with progressive hints, a "Mistakes to Avoid" tip, and a "Verify Answer" self-consistency check (the AI independently re-solves the problem three times and reports whether its answers agree with the stored one)
+- Topics are AI-normalized (e.g. "quadratic equations exercises using the discriminant" → "quadratic equations") so related exercises group together accurately, regardless of how specifically you phrase a request
+
+### Trend Analysis
+- Paste in a batch of exercises manually, or upload one or more exam files (images or PDFs) — even years' worth from the same course, analyzed together
+- Multi-file uploads show live per-file progress and are pooled into a single combined analysis
+- Every exercise gets tagged with topic, difficulty, hints, and a common-misconception note
+- A short AI-written narrative summarizes the actual pattern across the batch — not just "most common topic," but what a tutor would notice
+- One new practice exercise is generated **per topic** found in the batch, each using that topic's own submitted exercises as its style/difficulty blueprint
+
+### Pinning & Spaced Review
+- Pin any exercise for later review, in **Auto** or **Manual** mode
+- Auto mode: rate how hard you found the exercise; the review interval is computed from both the exercise's AI-assigned difficulty and your self-rated difficulty (a wider gap between "should have been easy" and "I found it hard" schedules a sooner review)
+- Manual mode: pick the exact number of days yourself
+- A bell icon in the navbar shows exercises due for review, with a popup that lets you jump straight into any of them
+
+### Weakness Tracking
+- Surfaces the topics you're actually struggling with, based on your own rated pins — not raw generation counts
+- Uses a "surprise gap" scoring model: getting a nominally *easy* exercise wrong is a stronger signal than struggling with a *hard* one
+- Only considers your 5 most recent rated pins per topic, so a weakness fades from the list as your recent performance improves — it doesn't linger forever
+- Requires at least 3 rated pins on a topic before showing anything, so nothing gets flagged on thin evidence
+- One click generates a fresh practice exercise for a weak topic directly, using your own struggled-with exercises as the blueprint — no manual topic entry required
+
+### Accounts
+- JWT-based auth (register/login/refresh) with a guest mode for browsing without an account
+- Favorites, personal notes per exercise, and full generation history
+
+## Tech Stack
+
+**Backend:** Django REST Framework, SQLite (dev), JWT auth via `djangorestframework-simplejwt`, scikit-learn (difficulty classifier)
+
+**Frontend:** React + TypeScript + Vite, Tailwind CSS v4, KaTeX (math rendering)
+
+**AI:** Hybrid setup —
+- **Groq** (Llama 3.3 70B) handles exercise generation, tagging, trend narratives, and answer verification — chosen for its free tier and high throughput
+- **Gemini** handles document analysis for uploaded exam files specifically, since dense multi-part exam pages benefit from stronger multimodal document understanding
+
+## Setup
+
+### Backend
+
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # or venv\Scripts\activate on Windows
+pip install -r requirements.txt
+```
+
+Create a `.env` file in the backend directory:
+
+```
+SECRET_KEY=your_django_secret_key
+GEMINI_API_KEY=your_gemini_api_key
+GROQ_API_KEY=your_groq_api_key
+```
+
+Run migrations and start the server:
+
+```bash
+python manage.py migrate
+python manage.py runserver
+```
+
+### Frontend
+
+```bash
+cd frontend/exercise-generator
+npm install
+```
+
+Create a `.env.development` file:
+
+```
+VITE_API_URL=http://localhost:8000
+```
+
+Start the dev server:
+
+```bash
+npm run dev
+```
+
+## API Keys
+
+- **Gemini:** [Google AI Studio](https://aistudio.google.com/) — used for document/exam file analysis
+- **Groq:** [console.groq.com](https://console.groq.com/) — free tier, no credit card required — used for all other AI generation

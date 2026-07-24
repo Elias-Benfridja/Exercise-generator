@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { getDueReviews } from "../api/exercises";
-import DueReviewsPopup from "./Duereviewspopup";
+import DueReviewsPopup from "./DueReviewsPopupProps";
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -84,7 +84,12 @@ export default function Navbar() {
                 </span>
               )}
             </button>
-            {popupOpen && <DueReviewsPopup onClose={() => setPopupOpen(false)} />}
+            {popupOpen && (
+              <DueReviewsPopup
+                onClose={() => setPopupOpen(false)}
+                onExerciseCleared={() => setDueCount((count) => Math.max(0, count - 1))}
+              />
+            )}
           </div>
         )}
 
