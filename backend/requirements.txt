@@ -38,6 +38,8 @@ numpy==2.5.0
 packaging==26.2
 pandas==3.0.3
 propcache==0.5.2
+psycopg==3.3.4
+psycopg-binary==3.3.4
 pyarrow==24.0.0
 pyasn1==0.6.3
 pyasn1_modules==0.4.2
@@ -61,6 +63,6 @@ typing-inspection==0.4.2
 typing_extensions==4.16.0
 urllib3==2.7.0
 websockets==16.0
+whitenoise==6.12.0
 xxhash==3.8.0
 yarl==1.24.2
-psycopg[binary]
