@@ -291,7 +291,7 @@ def get_similar_exercises(topic: str, limit: int = 3) -> list:
     return list(Exercise.objects.filter(
         topic__icontains=topic,
         source=Exercise.Source.SEED_DATASET,
-    )[:limit])
+    ).order_by('?')[:limit])
     
 
 def verify_exercise(exercise_id: int) -> dict:
