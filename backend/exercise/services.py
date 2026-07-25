@@ -78,9 +78,13 @@ _WEAKNESS_POINTS = {
 
 RECENT_PIN_WINDOW = 5
 
+# Classifier files are loaded lazily (see predict_difficulty), not at
+# module import time -- scikit-learn/scipy is a heavy import, and loading
+# it during Django/gunicorn boot competes for memory right at startup,
+# which matters on memory-constrained hosting (e.g. Render's free tier).
 _ml_models_dir = os.path.join(os.path.dirname(__file__), "ml_models")
-_vectorizer = joblib.load(os.path.join(_ml_models_dir, "vectorizer.joblib"))
-_classifier = joblib.load(os.path.join(_ml_models_dir, "difficulty_classifier.joblib"))
+_vectorizer = None
+_classifier = None
 
 
 def build_prompt(topic: str, difficulty: str, examples: list = None) -> str:
@@ -325,6 +329,10 @@ Problem: {exercise.question_text}"""
     }
 
 def predict_difficulty(question_text: str) -> str:
+    global _vectorizer, _classifier
+    if _vectorizer is None or _classifier is None:
+        _vectorizer = joblib.load(os.path.join(_ml_models_dir, "vectorizer.joblib"))
+        _classifier = joblib.load(os.path.join(_ml_models_dir, "difficulty_classifier.joblib"))
     vector = _vectorizer.transform([question_text])
     predicted_code = _classifier.predict(vector)[0]
     return Exercise.Difficulty.to_label(predicted_code)
