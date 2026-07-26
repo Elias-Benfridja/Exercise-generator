@@ -66,12 +66,15 @@ GEMINI_API_KEY=your_gemini_api_key
 GROQ_API_KEY=your_groq_api_key
 ```
 
-Run migrations and start the server:
+Run migrations, seed reference exercises, and start the server:
 
 ```bash
 python manage.py migrate
+python manage.py seed_exercises
 python manage.py runserver
 ```
+
+`seed_exercises` loads ~60 reference exercises across 10 common topics (source=SEED_DATASET) — these are what retrieval-grounded generation pulls from as style/difficulty examples, and are picked at random each time rather than always the same few, so generated exercises don't repeat the same style. Safe to re-run; it skips seeding if seed exercises already exist.
 
 ### Frontend
 
@@ -96,3 +99,15 @@ npm run dev
 
 - **Gemini:** [Google AI Studio](https://aistudio.google.com/) — used for document/exam file analysis
 - **Groq:** [console.groq.com](https://console.groq.com/) — free tier, no credit card required — used for all other AI generation
+
+## Deployment
+
+Deployed on free-tier infrastructure:
+
+- **Backend:** [Render](https://render.com/) — Django + gunicorn, static files served via WhiteNoise
+- **Database:** [Neon](https://neon.tech/) — serverless Postgres (free tier, no forced expiry, unlike Render's own free Postgres)
+
+Production settings live in `config/settings/deployment.py`. Notable free-tier-driven choices:
+- The difficulty classifier (scikit-learn) loads lazily on first use rather than at server boot, since importing it competes for memory with Django/gunicorn on Render's 512MB free instance
+- The free web service sleeps after 15 minutes idle — the first request after a period of inactivity takes 30-60s to wake up
+

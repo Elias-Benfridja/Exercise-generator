@@ -34,9 +34,17 @@ export default function DueReviewsPopup({ onClose, onExerciseCleared }: DueRevie
     };
   }, []);
 
-  function handleExerciseClick(exercise: Exercise) {
+  async function handleExerciseClick(exercise: Exercise) {
     onClose();
-    navigate("/", { state: { generatedExercise: exercise } });
+    let exerciseToShow = exercise;
+    try {
+      await unpinExercise(exercise.id);
+      exerciseToShow = { ...exercise, is_pinned: false, review_at: null };
+      onExerciseCleared?.();
+    } catch (err) {
+      console.log(err);
+    }
+    navigate("/", { state: { generatedExercise: exerciseToShow } });
   }
 
   async function handleClear(e: MouseEvent, exerciseId: number) {
